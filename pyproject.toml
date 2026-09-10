@@ -58,13 +58,13 @@ nvidia-asr = [
     "scipy>=1.12,<2",
 ]
 capture = [
-    "numpy>=1.26,<3",
+    "numpy>=1.26,<2.4",
     "PyAudioWPatch>=0.2.12.7,<0.3; sys_platform == 'win32'",
     "sounddevice>=0.5.3,<1; sys_platform != 'win32'",
 ]
 diarization = [
     "sherpa-onnx>=1.10.28,<2",
-    "numpy>=1.26,<3",
+    "numpy>=1.26,<2.4",
 ]
 pyannote-diarization = [
     "pyannote-audio>=4.0,<5",
@@ -80,7 +80,7 @@ rag = [
 ]
 ai = [
     "sherpa-onnx>=1.10.28,<2",
-    "numpy>=1.26,<3",
+    "numpy>=1.26,<2.4",
     "huggingface-hub>=0.27,<2",
     "llama-cpp-python>=0.3.8,<1",
     "sqlite-vec>=0.1.6,<1",
@@ -88,6 +88,7 @@ ai = [
 dev = [
     "httpx2>=2.9.0,<3",
     "mypy>=1.14.0,<2",
+    "numpy>=1.26,<2.4",
     "pytest>=8.3.0,<9",
     "pytest-asyncio>=0.25.0,<1",
     "pytest-cov>=6.0.0,<7",
@@ -133,7 +134,3 @@ files = ["src"]
 [[tool.mypy.overrides]]
 module = ["uvicorn.*"]
 ignore_missing_imports = true
-
-[[tool.mypy.overrides]]
-module = ["numpy", "numpy.*"]
-follow_imports = "skip"
