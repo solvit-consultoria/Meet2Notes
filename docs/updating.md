@@ -47,9 +47,10 @@ manually if a later runtime problem is discovered.
 1. Update the version in `pyproject.toml` and
    `src/local_meeting_ai/__init__.py`.
 2. Merge to `main` and wait for the `quality` workflow to pass.
-3. Run the manual `release` workflow with the exact version, such as `0.6.0`.
-4. The workflow re-runs Ruff, mypy, and pytest before publishing `v0.6.0` with
-   generated release notes.
+3. Add the matching version section to `CHANGELOG.md` and run the manual
+   `release` workflow with that exact version, such as `1.2.3`.
+4. The workflow re-runs Ruff, mypy, and pytest before publishing `v1.2.3` with
+   the reviewed notes extracted from the changelog.
 
 The updater begins offering the release after GitHub publishes it. No update is
 offered while the repository has no stable Releases.

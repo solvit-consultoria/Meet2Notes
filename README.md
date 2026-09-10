@@ -27,6 +27,10 @@ speakers, and turns conversations into searchable, structured meeting notes.
 It is designed for private local AI workflows: recordings, transcripts, model
 files, and application data remain under the user's control.
 
+For video calls, select **Microphone + System audio** together to record both
+sides of the conversation. See the [audio capture setup guide](docs/audio-capture.md)
+for Windows loopback, Linux monitors, and macOS virtual inputs.
+
 Meet2Notes is a private, local-first alternative to commercial AI meeting
 assistants such as **Granola**, **Fireflies.ai**, **Fathom**, and **Otter.ai**.
 It is also an open-source alternative to **Meetily** for people and teams that
@@ -43,10 +47,17 @@ Whisper, Sherpa-ONNX, or a particular language model.
 > Meet2Notes is in active alpha development. Back up important recordings and
 > obtain every consent required before recording a conversation.
 
-## Meet2Notes 0.6.0: your meeting memory, available to your AI
+## Meet2Notes 0.6: the complete meeting, available to your AI
 
-Version 0.6.0 turns Meet2Notes into a private knowledge source for the desktop
-AI tools people already use. Its new local **Model Context Protocol (MCP)**
+Version 0.6.1 can record **Microphone + System audio** simultaneously, capturing
+your voice and the other participants in one synchronized local recording. Each
+input has its own device selector and live meter; the mixed audio feeds both live
+transcription and the final WAV while preserving headroom when people speak at
+the same time. Windows uses native WASAPI loopback, while the setup guide explains
+the virtual or monitor inputs used on macOS and Linux.
+
+The 0.6 series also turns Meet2Notes into a private knowledge source for the desktop
+AI tools people already use. Its local **Model Context Protocol (MCP)**
 server connects **Claude Desktop, ChatGPT Desktop, Codex**, and compatible MCP
 clients to completed meetings without copying the Meet2Notes database or
 introducing another cloud service.
@@ -193,7 +204,7 @@ custom model storage, and backend-specific setup, continue to the
 
 ```mermaid
 flowchart LR
-    A["Microphone, system audio, or media file"] --> B["Capture and FFmpeg normalization"]
+    A["Microphone + system audio, or media file"] --> B["Capture and FFmpeg normalization"]
     B --> C["Selected live ASR"]
     B --> D["Selected final ASR"]
     C --> E["Timestamped transcript"]

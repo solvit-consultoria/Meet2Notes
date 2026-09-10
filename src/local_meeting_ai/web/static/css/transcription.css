@@ -537,6 +537,22 @@
   align-self: end;
 }
 
+.live-capture-strip:has(.live-input-levels:not(.hidden)) { flex-wrap: wrap; }
+.live-input-levels { display: flex; flex-basis: 100%; gap: 20px; }
+.live-input-level {
+  display: flex;
+  flex: 1;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+  font-size: 10px;
+}
+.live-input-level meter { width: 70px; flex-shrink: 0; height: 8px; }
+@media (max-width: 600px) {
+  .live-input-levels { flex-direction: column; gap: 6px; }
+  .live-input-level { justify-content: space-between; }
+}
+
 .live-ai-assistant-widget-icon img {
   width: 50px;
   height: 50px;
@@ -1015,10 +1031,16 @@
   width: 100%;
   max-width: none;
   padding: 23px;
+  gap: 12px;
 }
 
 .capture-modal-header {
-  margin-bottom: 17px;
+  margin-bottom: 0;
+}
+
+.capture-modal-panel > :is(.source-selection-summary, .source-picker-panel, .file-source-panel,
+  .capture-settings-note, .capture-privacy-note, .capture-modal-actions) {
+  margin-top: 0;
 }
 
 .capture-modal-header h2 {
@@ -1109,12 +1131,92 @@
   width: 14px;
   height: 14px;
   border: 1px solid #cbd4e1;
-  border-radius: 50%;
+  border-radius: 4px;
 }
 
 .source-mode-card:has(input:checked) > i {
   background: #176bff;
-  border: 4px solid #dbe8ff;
+  border-color: #176bff;
+}
+
+.source-mode-card:has(input:checked) > i::after {
+  display: block;
+  width: 4px;
+  height: 7px;
+  margin: 1px 0 0 4px;
+  border: solid white;
+  border-width: 0 2px 2px 0;
+  content: "";
+  transform: rotate(45deg);
+}
+
+.source-mode-card:has(input:focus-visible) {
+  outline: 3px solid #80adff;
+  outline-offset: 3px;
+}
+
+.source-selection-summary {
+  margin-top: 12px;
+  padding: 9px 12px;
+  color: #667085;
+  background: #f2f4f7;
+  border-radius: 8px;
+  font-size: 10px;
+  line-height: 1.5;
+}
+
+.source-selection-summary.combined {
+  color: #175cd3;
+  background: #edf4ff;
+}
+
+.source-input-group {
+  min-width: 0;
+  margin: 0;
+  padding: 10px 0 0;
+  border: 0;
+}
+
+.source-input-group + .source-input-group {
+  margin-top: 12px;
+  border-top: 1px solid #dfe5ee;
+}
+
+@media (min-width: 701px) {
+  .native-source-list:has(.source-input-group + .source-input-group) {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 16px;
+  }
+  .source-input-group + .source-input-group { margin-top: 0; border-top: 0; }
+  .native-source-list:has(.source-input-group + .source-input-group) .source-input-group > p {
+    min-height: 28px;
+  }
+}
+
+.source-input-group legend {
+  padding: 0;
+  color: #344054;
+  font-size: 11px;
+  font-weight: 700;
+}
+
+.source-input-group p {
+  margin: 0 0 8px;
+  color: #667085;
+  font-size: 9px;
+  line-height: 1.5;
+}
+
+.source-device-options {
+  display: grid;
+  gap: 6px;
+  max-height: 156px;
+  overflow-y: auto;
+}
+
+.source-input-group .source-missing {
+  margin-top: 8px;
+  color: #b54708;
 }
 
 .source-picker-panel,
@@ -1152,14 +1254,14 @@
 
 .native-source-list {
   display: grid;
-  max-height: 190px;
+  max-height: 360px;
   gap: 6px;
   overflow-y: auto;
 }
 
 .native-source-option {
   display: grid;
-  grid-template-columns: auto minmax(0, 1fr) minmax(72px, 100px) auto;
+  grid-template-columns: auto minmax(0, 1fr) minmax(60px, 85px);
   min-height: 48px;
   align-items: center;
   gap: 10px;
@@ -1415,6 +1517,11 @@
 
 .capture-modal-actions {
   margin-top: 14px;
+  position: sticky;
+  bottom: -1px;
+  z-index: 1;
+  padding: 12px 0 0;
+  background: #fff;
 }
 
 .result-panel-header {

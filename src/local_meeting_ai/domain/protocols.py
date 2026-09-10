@@ -108,6 +108,7 @@ class AudioCaptureBackend(Protocol):
         session_id: str,
         source_id: str,
         destination: Path,
+        additional_source_id: str | None = None,
     ) -> CaptureStatus: ...
 
     def status(self) -> CaptureStatus | None: ...

@@ -6,6 +6,8 @@ and future plans do not become mixed together.
 
 ## Current behavior and public contracts
 
+- [Audio capture](audio-capture.md): microphone + system recording and setup on
+  Windows, Linux, and macOS.
 - [Architecture](architecture.md): process boundaries, workers, storage, and the
   provider registry.
 - [Plugin API](plugins.md): how users discover, install, enable, and remove

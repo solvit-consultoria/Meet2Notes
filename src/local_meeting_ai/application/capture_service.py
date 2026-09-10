@@ -109,16 +109,22 @@ class LiveCaptureService:
     async def start(
         self,
         *,
-        source_id: str,
+        source_id: str | None,
         title: str | None,
         profile_id: str,
         language: str | None,
         task: str | None,
         allow_model_download: bool,
+        source_ids: list[str] | None = None,
     ) -> LiveCaptureSession:
         with self._lock:
             if self._session is not None:
                 raise ValidationError("Another live transcription is already active")
+            selected_ids = (
+                source_ids if source_ids is not None else ([source_id] if source_id else [])
+            )
+            if not 1 <= len(selected_ids) <= 2 or len(set(selected_ids)) != len(selected_ids):
+                raise ValidationError("Choose one input, or a microphone and a system source")
             clean_title = title.strip() if title and title.strip() else None
             resolved_title = clean_title or self.transcriptions.next_default_title()
             preference_values = self.preferences.get_all()
@@ -156,10 +162,14 @@ class LiveCaptureService:
                 )
                 session_id = str(uuid4())
                 destination = self.storage.new_live_capture_path(meeting.uuid)
+                capture_options = (
+                    {"additional_source_id": selected_ids[1]} if len(selected_ids) == 2 else {}
+                )
                 status = self.backend.start(
                     session_id=session_id,
-                    source_id=source_id,
+                    source_id=selected_ids[0],
                     destination=destination,
+                    **capture_options,
                 )
             except Exception:
                 self.meetings.delete(meeting.id)
@@ -174,6 +184,9 @@ class LiveCaptureService:
                 title=resolved_title,
                 state=status.state,
                 source=status.source,
+                sources=status.sources or (status.source,),
+                source_levels=status.source_levels or {status.source.id: status.level},
+                capture_error=status.error,
                 elapsed_ms=status.elapsed_ms,
                 level=status.level,
                 started_at=started_at,
@@ -274,6 +287,9 @@ class LiveCaptureService:
             title=session.title,
             state="stopped",
             source=session.source,
+            sources=session.sources,
+            source_levels={source.id: 0.0 for source in session.sources},
+            capture_error=session.capture_error,
             elapsed_ms=captured.duration_ms,
             level=0.0,
             started_at=session.started_at,
@@ -597,6 +613,9 @@ class LiveCaptureService:
             title=session.title,
             state=status.state,
             source=status.source,
+            sources=status.sources or (status.source,),
+            source_levels=status.source_levels or {status.source.id: status.level},
+            capture_error=status.error,
             elapsed_ms=status.elapsed_ms,
             level=status.level,
             started_at=session.started_at,

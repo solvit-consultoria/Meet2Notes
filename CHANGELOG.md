@@ -2,6 +2,23 @@
 
 ## Unreleased
 
+## 0.6.1 - 2026-09-10
+
+- Added simultaneous microphone and system-audio capture so video calls can
+  record both sides of the conversation into one private local meeting.
+- Added a clock-aligned 48 kHz mono mixer with per-input resampling, equal-gain
+  headroom, gap preservation, and the same mixed frames for live transcription
+  and the final WAV recording.
+- Redesigned the New transcription source picker with independent microphone
+  and system selections, persistent device choices, platform guidance, source
+  availability checks, and separate live level meters.
+- Preserved the single-source capture API while adding a bounded `source_ids`
+  request for exactly one microphone/interface plus one system source.
+- Improved capture failure handling for disconnected devices, silent Windows
+  loopback outputs, pause/resume, partial stream startup, and cleanup on retry.
+- Added cross-platform combined-capture and mixer tests plus detailed Windows,
+  macOS, and Linux setup and troubleshooting documentation.
+
 ## 0.6.0 - 2026-08-24
 
 - Added a local read-only MCP server for Claude Desktop, ChatGPT Desktop,

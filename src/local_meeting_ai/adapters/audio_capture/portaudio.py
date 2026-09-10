@@ -76,10 +76,11 @@ class PortAudioCaptureBackend:
             "source_count": len(sources),
             "permission_required": self.platform_name == "Darwin",
             "system_audio_note": (
-                "macOS system audio requires a Core Audio Tap, ScreenCaptureKit, "
-                "or a virtual input device."
+                "macOS system audio requires a virtual input such as BlackHole, "
+                "routed together with your headphones through a Multi-Output Device."
                 if self.platform_name == "Darwin"
-                else "PipeWire/Pulse monitor sources are detected automatically."
+                else "Select a PipeWire/PulseAudio monitor exposed as an input device. "
+                "If none appears, expose the output monitor through your audio configuration."
             ),
         }
 
@@ -88,7 +89,10 @@ class PortAudioCaptureBackend:
         devices = module.query_devices()
         host_apis = module.query_hostapis()
         default_device = module.default.device
-        default_input = int(default_device[0] if isinstance(default_device, (list, tuple)) else -1)
+        try:
+            default_input = int(default_device[0])
+        except (TypeError, IndexError):
+            default_input = -1
         sources: list[AudioCaptureSource] = []
         for index, device in enumerate(devices):
             channels = int(device["max_input_channels"])
@@ -167,7 +171,10 @@ class PortAudioCaptureBackend:
         session_id: str,
         source_id: str,
         destination: Path,
+        additional_source_id: str | None = None,
     ) -> CaptureStatus:
+        if additional_source_id is not None:
+            raise ValidationError("Use the combined backend for microphone + system capture")
         with self._lock:
             if self._state in {"recording", "paused"}:
                 raise ValidationError("Another live capture is already active")

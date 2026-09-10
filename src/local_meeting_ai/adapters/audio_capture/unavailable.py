@@ -41,6 +41,7 @@ class UnavailableCaptureBackend:
         session_id: str,
         source_id: str,
         destination: Path,
+        additional_source_id: str | None = None,
     ) -> CaptureStatus:
         del session_id, source_id, destination
         raise CapabilityUnavailableError(self.reason)

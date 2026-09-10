@@ -197,6 +197,9 @@ class WindowsWasapiCaptureBackend:
                     start=True,
                 )
                 if not sample_ready.wait(timeout=0.5):
+                    if source.is_loopback:
+                        # WASAPI may omit callbacks while the output is silent.
+                        return 0.0
                     raise TimeoutError("the device did not provide an audio sample")
                 return sampled_level
             except Exception as error:
@@ -216,7 +219,10 @@ class WindowsWasapiCaptureBackend:
         session_id: str,
         source_id: str,
         destination: Path,
+        additional_source_id: str | None = None,
     ) -> CaptureStatus:
+        if additional_source_id is not None:
+            raise ValidationError("Use the combined backend for microphone + system capture")
         with self._lock:
             if self._state in {"recording", "paused"}:
                 raise ValidationError("Another live capture is already active")

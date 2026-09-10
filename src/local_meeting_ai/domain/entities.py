@@ -242,6 +242,8 @@ class CaptureStatus:
     elapsed_ms: int
     level: float
     error: str | None = None
+    sources: tuple[AudioCaptureSource, ...] = ()
+    source_levels: dict[str, float] = field(default_factory=dict)
 
 
 @dataclass(frozen=True, slots=True)
@@ -251,6 +253,7 @@ class CapturedAudio:
     duration_ms: int
     sample_rate: int
     channels: int
+    sources: tuple[AudioCaptureSource, ...] = ()
 
 
 @dataclass(frozen=True, slots=True)
@@ -320,3 +323,6 @@ class LiveCaptureSession:
     realtime_status: str
     realtime_message: str
     segment_count: int
+    sources: tuple[AudioCaptureSource, ...] = ()
+    source_levels: dict[str, float] = field(default_factory=dict)
+    capture_error: str | None = None

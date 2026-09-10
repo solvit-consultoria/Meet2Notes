@@ -5,6 +5,7 @@ import io
 import shutil
 import time
 import wave
+from dataclasses import replace
 from pathlib import Path
 from typing import Any
 
@@ -47,6 +48,13 @@ class FakeCaptureBackend:
         )
         self._status: CaptureStatus | None = None
         self._frames_drained = False
+        self.system_source = replace(
+            self.source,
+            id="fake:system:0",
+            name="Headphones",
+            kind="system",
+            is_loopback=True,
+        )
 
     def capability(self) -> dict[str, Any]:
         return {
@@ -60,7 +68,7 @@ class FakeCaptureBackend:
         }
 
     def list_sources(self) -> list[AudioCaptureSource]:
-        return [self.source]
+        return [self.source, self.system_source]
 
     def probe_level(self, source_id: str) -> float:
         assert source_id == self.source.id
@@ -72,8 +80,10 @@ class FakeCaptureBackend:
         session_id: str,
         source_id: str,
         destination: Path,
+        additional_source_id: str | None = None,
     ) -> CaptureStatus:
         assert source_id == self.source.id
+        assert additional_source_id in {None, self.system_source.id}
         destination.parent.mkdir(parents=True, exist_ok=True)
         with wave.open(str(destination), "wb") as audio:
             audio.setnchannels(1)
@@ -87,6 +97,10 @@ class FakeCaptureBackend:
             destination=destination,
             elapsed_ms=120,
             level=0.42,
+            sources=(self.source, self.system_source) if additional_source_id else (self.source,),
+            source_levels={self.source.id: 0.42, self.system_source.id: 0.3}
+            if additional_source_id
+            else {self.source.id: 0.42},
         )
         self._frames_drained = False
         return self._status
@@ -115,6 +129,8 @@ class FakeCaptureBackend:
             destination=self._status.destination,
             elapsed_ms=180,
             level=0,
+            sources=self._status.sources,
+            source_levels={source.id: 0.0 for source in self._status.sources},
         )
         return self._status
 
@@ -127,6 +143,7 @@ class FakeCaptureBackend:
             destination=self._status.destination,
             elapsed_ms=220,
             level=0.36,
+            sources=self._status.sources,
         )
         return self._status
 
@@ -138,6 +155,7 @@ class FakeCaptureBackend:
             duration_ms=500,
             sample_rate=16000,
             channels=1,
+            sources=self._status.sources,
         )
         self._status = None
         return captured
@@ -333,6 +351,44 @@ def _wait_for_job(client: TestClient, job_uuid: str) -> dict[str, Any]:
     raise AssertionError("Job did not reach a terminal state")
 
 
+def test_combined_capture_api_keeps_both_sources_through_pause_and_save(tmp_path: Path) -> None:
+    with TestClient(
+        create_app(
+            AppSettings(data_dir=tmp_path / "combined", testing=True, open_browser=False),
+            transcription_engine=FakeTranscriptionEngine(),
+            audio_normalizer=FakeNormalizer(),
+            audio_capture_backend=FakeCaptureBackend(),
+            diarization_engine=FakeDiarizationEngine(),
+            summary_engine=FakeSummaryEngine(),
+        )
+    ) as client:
+        response = client.post(
+            "/api/capture/sessions",
+            json={
+                "source_ids": ["fake:microphone:0", "fake:system:0"],
+                "title": "Video call",
+            },
+        )
+        assert response.status_code == 201, response.text
+        session = response.json()
+        assert [source["kind"] for source in session["sources"]] == ["microphone", "system"]
+        assert len(session["source_levels"]) == 2
+        root = f"/api/capture/sessions/{session['session_id']}"
+        assert len(client.post(f"{root}/pause").json()["sources"]) == 2
+        assert len(client.post(f"{root}/resume").json()["sources"]) == 2
+        saved = client.post(
+            f"{root}/stop",
+            json={
+                "postprocess_options": {"diarization": False, "summary": False},
+            },
+        )
+        assert saved.status_code == 200, saved.text
+        assert len(saved.json()["session"]["sources"]) == 2
+        metadata = saved.json()["recording"]["metadata"]
+        assert len(metadata["capture_sources"]) == 2
+        assert metadata["capture_sources"][1]["name"] == "Headphones"
+
+
 def test_live_capture_pause_stop_and_transcribe(tmp_path: Path) -> None:
     settings = AppSettings(
         data_dir=tmp_path / "capture-data",
@@ -386,53 +442,36 @@ def test_live_capture_pause_stop_and_transcribe(tmp_path: Path) -> None:
             raise AssertionError("Live segment did not appear during capture")
         assert current.json()["level"] == 0.42
         assert current.json()["realtime_status"] == "live"
-        live_detail = client.get(
-            f"/api/transcriptions/{session['transcription_id']}"
-        ).json()
+        live_detail = client.get(f"/api/transcriptions/{session['transcription_id']}").json()
         assert live_detail["transcription"]["status"] == "running"
         assert live_detail["segments"][0]["text"] == "Captured locally."
         assert live_detail["segments"][0]["is_final"] is False
 
-        paused = client.post(
-            f"/api/capture/sessions/{session['session_id']}/pause"
-        )
+        paused = client.post(f"/api/capture/sessions/{session['session_id']}/pause")
         assert paused.status_code == 200
         assert paused.json()["state"] == "paused"
 
-        resumed = client.post(
-            f"/api/capture/sessions/{session['session_id']}/resume"
-        )
+        resumed = client.post(f"/api/capture/sessions/{session['session_id']}/resume")
         assert resumed.status_code == 200
         assert resumed.json()["state"] == "recording"
 
-        stopped = client.post(
-            f"/api/capture/sessions/{session['session_id']}/stop"
-        )
+        stopped = client.post(f"/api/capture/sessions/{session['session_id']}/stop")
         assert stopped.status_code == 200
         payload = stopped.json()
         assert payload["session"]["state"] == "stopped"
-        assert (
-            payload["recording"]["metadata"]["capture_source_name"]
-            == "Studio microphone"
-        )
+        assert payload["recording"]["metadata"]["capture_source_name"] == "Studio microphone"
         assert payload["transcription"]["title"] == "Customer interview"
         assert payload["transcription"]["id"] == session["transcription_id"]
         stopped_meeting = client.get(f"/api/meetings/{session['meeting_id']}").json()
         assert stopped_meeting["ended_at"] is not None
         assert stopped_meeting["duration_ms"] == 500
-        assert len(
-            client.get(
-                f"/api/meetings/{session['meeting_id']}/transcriptions"
-            ).json()
-        ) == 1
+        assert len(client.get(f"/api/meetings/{session['meeting_id']}/transcriptions").json()) == 1
 
         terminal = _wait_for_job(client, payload["transcription_job"]["uuid"])
         assert terminal["status"] == "completed"
         assert terminal["payload"]["postprocess"] is True
         for _ in range(100):
-            workflow_jobs = client.get(
-                f"/api/jobs?meeting_id={session['meeting_id']}"
-            ).json()
+            workflow_jobs = client.get(f"/api/jobs?meeting_id={session['meeting_id']}").json()
             summary_job = next(
                 (job for job in workflow_jobs if job["job_type"] == "summarize"),
                 None,
@@ -464,14 +503,10 @@ def test_live_capture_pause_stop_and_transcribe(tmp_path: Path) -> None:
             for run in plugin_runs
         )
         assert any(job["job_type"] == "diarize" for job in workflow_jobs)
-        detail = client.get(
-            f"/api/transcriptions/{payload['transcription']['id']}"
-        ).json()
+        detail = client.get(f"/api/transcriptions/{payload['transcription']['id']}").json()
         assert detail["segments"][0]["text"] == "Captured locally."
         assert detail["segments"][0]["speaker_id"] is not None
-        summaries = client.get(
-            f"/api/meetings/{session['meeting_id']}/summaries"
-        ).json()
+        summaries = client.get(f"/api/meetings/{session['meeting_id']}/summaries").json()
         assert summaries[0]["content_markdown"].startswith("# Summary")
 
         # A stopped capture must release the backend so the source picker can
@@ -632,9 +667,7 @@ def test_imported_media_runs_complete_meeting_pipeline(tmp_path: Path) -> None:
         assert transcription_job["payload"]["postprocess"] is True
 
         for _ in range(150):
-            workflow_jobs = client.get(
-                f"/api/jobs?meeting_id={meeting['id']}"
-            ).json()
+            workflow_jobs = client.get(f"/api/jobs?meeting_id={meeting['id']}").json()
             summary_job = next(
                 (job for job in workflow_jobs if job["job_type"] == "summarize"),
                 None,
@@ -658,9 +691,7 @@ def test_imported_media_runs_complete_meeting_pipeline(tmp_path: Path) -> None:
             for job in workflow_jobs
             if job["job_type"] in {"transcribe", "diarize", "summarize"}
         )
-        detail = client.get(
-            f"/api/transcriptions/{started.json()['transcription']['id']}"
-        ).json()
+        detail = client.get(f"/api/transcriptions/{started.json()['transcription']['id']}").json()
         assert detail["segments"][0]["speaker_id"] is not None
         assert detail["speakers"][0]["display_name"] == "Speaker 1"
         assert detail["speakers"][0]["talk_time_ms"] == 500
@@ -713,9 +744,9 @@ def test_imported_media_runs_complete_meeting_pipeline(tmp_path: Path) -> None:
         )
         assert edited.status_code == 200
         assert edited.json()["content_markdown"] == edited_notes
-        assert edited.json()["structured"]["manual_edit"][
-            "original_content_markdown"
-        ].startswith("# Summary")
+        assert edited.json()["structured"]["manual_edit"]["original_content_markdown"].startswith(
+            "# Summary"
+        )
         assert edited.json()["structured"]["manual_edit"]["edited_at"]
 
         rebuilt = client.post(
@@ -726,9 +757,7 @@ def test_imported_media_runs_complete_meeting_pipeline(tmp_path: Path) -> None:
         assert rebuilt.json()["summary"]["template_id"] == daily_format["id"]
         rebuilt_job = _wait_for_job(client, rebuilt.json()["job"]["uuid"])
         assert rebuilt_job["status"] == "completed"
-        rebuilt_summaries = client.get(
-            f"/api/meetings/{meeting['id']}/summaries"
-        ).json()
+        rebuilt_summaries = client.get(f"/api/meetings/{meeting['id']}/summaries").json()
         assert rebuilt_summaries[0]["id"] == rebuilt.json()["summary"]["id"]
         assert rebuilt_summaries[0]["content_markdown"].startswith("# Summary")
         assert any(item["content_markdown"] == edited_notes for item in rebuilt_summaries)

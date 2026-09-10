@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import platform
 
+from local_meeting_ai.adapters.audio_capture.combined import CombinedCaptureBackend
 from local_meeting_ai.domain.protocols import AudioCaptureBackend
 
 
@@ -12,13 +13,13 @@ def create_audio_capture_backend() -> AudioCaptureBackend:
             WindowsWasapiCaptureBackend,
         )
 
-        return WindowsWasapiCaptureBackend()
+        return CombinedCaptureBackend(WindowsWasapiCaptureBackend(), system)
     if system in {"Darwin", "Linux"}:
         from local_meeting_ai.adapters.audio_capture.portaudio import (
             PortAudioCaptureBackend,
         )
 
-        return PortAudioCaptureBackend(system)
+        return CombinedCaptureBackend(PortAudioCaptureBackend(system), system)
 
     from local_meeting_ai.adapters.audio_capture.unavailable import (
         UnavailableCaptureBackend,

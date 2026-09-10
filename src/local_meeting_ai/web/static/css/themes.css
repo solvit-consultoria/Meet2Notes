@@ -1,4 +1,16 @@
 /* Global appearance controls and dark theme. Loaded last to cover page-specific styles. */
+[data-theme="dark"] .source-selection-summary { color: #aebed4; background: #182231; }
+[data-theme="dark"] .source-selection-summary.combined { color: #a9c7ff; background: #192d49; }
+[data-theme="dark"] .source-input-group legend { color: #e7edf7; }
+[data-theme="dark"] .source-input-group p { color: #aebed4; }
+[data-theme="dark"] .source-input-group + .source-input-group { border-color: #344054; }
+[data-theme="dark"] .source-input-group .source-missing { color: #fec84b; }
+[data-theme="dark"] .capture-modal-actions { background: #151d29; }
+[data-theme="dark"] .capture-modal .source-guidance {
+  color: #bacbe2;
+  background: #192637;
+  border-color: #34455e;
+}
 .page-header-actions,
 .mobile-actions {
   display: flex;

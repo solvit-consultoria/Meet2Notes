@@ -66,6 +66,7 @@
   let terminalJobIds = new Set();
   let sourcePreviewTimer = null;
   let sourcePreviewBusy = false;
+  const selectedDevices = { microphone: null, system: null };
   let latestActivityId = 0;
   let postprocessMeetingId = null;
   let workflowVisible = false;
@@ -428,6 +429,7 @@
   }
 
   async function refreshSources() {
+    rememberSelectedDevices();
     const list = document.querySelector("#native-source-list");
     list.innerHTML = '<div class="source-loading"><i class="mini-spinner"></i> Scanning audio devices…</div>';
     try {
@@ -437,6 +439,7 @@
       renderSources();
     } catch (error) {
       list.innerHTML = `<div class="source-empty">${escapeHTML(error.message)}</div>`;
+      document.querySelector("#transcription-submit").disabled = true;
     }
   }
 
@@ -449,6 +452,7 @@
   }
 
   function renderSourceMode() {
+    rememberSelectedDevices();
     const mode = selectedSourceMode();
     const nativePanel = document.querySelector("#native-source-panel");
     const filePanel = document.querySelector("#file-source-panel");
@@ -458,46 +462,82 @@
     submitCopy.textContent = mode === "file"
       ? "Import and transcribe"
       : "Start live transcription";
-    if (mode === "file") return;
+    const modes = selectedLiveModes();
+    const summary = document.querySelector("#source-selection-summary");
+    summary.classList.toggle("combined", mode === "combined");
+    summary.textContent = t(mode === "file" ? "capture.file_summary"
+      : mode === "combined" ? "capture.combined_summary"
+        : modes.length ? "capture.single_summary" : "capture.choose_sources");
+    if (mode === "file") {
+      stopSourcePreview();
+      document.querySelector("#transcription-submit").disabled = false;
+      return;
+    }
 
-    const candidates = audioSources.filter((source) =>
-      mode === "system"
-        ? source.kind === "system"
-        : source.kind === "microphone" || source.kind === "interface");
-    document.querySelector("#source-picker-title").textContent =
-      mode === "system" ? "System audio sources" : "Available microphones and inputs";
     const list = document.querySelector("#native-source-list");
-    if (!candidates.length) {
-      list.innerHTML = `
-        <div class="source-empty">
-          ${mode === "system"
-            ? "No system-audio source is currently available."
-            : "No microphone or audio input was found."}
-        </div>`;
-    } else {
-      list.innerHTML = candidates.map((source, index) => `
-        <label class="native-source-option">
-          <input type="radio" name="native-source" value="${escapeHTML(source.id)}"
-            ${source.is_default || (!candidates.some((item) => item.is_default) && index === 0) ? "checked" : ""}>
+    list.innerHTML = modes.map((kind) => {
+      const candidates = audioSources.filter((source) =>
+        kind === "system" ? source.kind === "system" : source.kind !== "system");
+      const available = candidates.filter((source) => source.available !== false);
+      // Keep choices across adding/removing an input and device refreshes.
+      const selected = available.find((source) => source.id === selectedDevices[kind])
+        || (!selectedDevices[kind] && (available.find((source) => source.is_default) || available[0]));
+      if (selected) selectedDevices[kind] = selected.id;
+      const options = candidates.map((source) => `
+        <label class="native-source-option" title="${escapeHTML(source.name)}">
+          <input type="radio" name="native-source-${kind}" data-native-source="${kind}" value="${escapeHTML(source.id)}"
+            ${selected?.id === source.id ? "checked" : ""} ${source.available === false ? "disabled" : ""}>
           <span>
             <strong>${escapeHTML(source.name)}</strong>
-            <small>${escapeHTML(source.host_api)} · ${source.channels} ch · ${source.sample_rate / 1000} kHz</small>
+            <small>${source.available === false ? escapeHTML(source.unavailable_reason || t("capture.unavailable"))
+              : source.is_default ? t("capture.default_device") : t("capture.available_device")}</small>
           </span>
           <span class="source-level-preview" data-source-meter="${escapeHTML(source.id)}" aria-label="Live input level">
             <i></i>
           </span>
-          ${source.is_default ? '<span class="source-default-badge">Default</span>' : ""}
         </label>`).join("");
-    }
+      return `<fieldset class="source-input-group"><legend>${t(`capture.${kind}_label`)}</legend>
+        <p>${t(`capture.${kind}_hint`)}</p><div class="source-device-options">${options ||
+          `<div class="source-empty">${t(`capture.no_${kind}`)}</div>`}</div>
+        ${available.length && !selected ? `<p class="source-missing">${t("capture.device_removed")}</p>` : ""}
+        </fieldset>`;
+    }).join("");
     const guidance = document.querySelector("#source-guidance");
-    const note = mode === "system" ? captureCapability.system_audio_note : null;
-    guidance.textContent = note || "";
-    guidance.classList.toggle("hidden", !note);
+    const hasSystem = modes.includes("system");
+    const platformKey = { Windows: "windows", Darwin: "macos", Linux: "linux" }[captureCapability.platform];
+    guidance.textContent = !captureCapability.available
+      ? captureCapability.reason || t("capture.unavailable")
+      : hasSystem && platformKey ? t(`capture.help_${platformKey}`) : "";
+    guidance.classList.toggle("hidden", !guidance.textContent);
+    syncCaptureSelection();
     scheduleSourcePreview();
   }
 
   function selectedSourceMode() {
-    return document.querySelector('input[name="source-mode"]:checked')?.value || "microphone";
+    if (document.querySelector('input[name="source-mode"][value="file"]').checked) return "file";
+    const modes = selectedLiveModes();
+    return modes.length === 2 ? "combined" : modes[0] || "none";
+  }
+
+  function selectedLiveModes() {
+    return [...document.querySelectorAll('input[name="source-mode"]:checked')]
+      .map((input) => input.value).filter((mode) => mode !== "file");
+  }
+
+  function selectedNativeSources() {
+    return [...document.querySelectorAll("[data-native-source]:checked")]
+      .filter((input) => selectedLiveModes().includes(input.dataset.nativeSource));
+  }
+
+  function rememberSelectedDevices() {
+    document.querySelectorAll("[data-native-source]:checked").forEach((input) => {
+      selectedDevices[input.dataset.nativeSource] = input.value;
+    });
+  }
+
+  function syncCaptureSelection() {
+    document.querySelector("#transcription-submit").disabled = selectedSourceMode() !== "file" &&
+      (!selectedLiveModes().length || selectedNativeSources().length !== selectedLiveModes().length);
   }
 
   function stopSourcePreview() {
@@ -524,25 +564,30 @@
       scheduleSourcePreview(250);
       return;
     }
-    const selected = document.querySelector('input[name="native-source"]:checked');
-    if (!selected) return;
-    const meter = document.querySelector(
-      `[data-source-meter="${CSS.escape(selected.value)}"]`,
-    );
-    document.querySelectorAll(".source-level-preview").forEach((item) =>
-      item.classList.toggle("active", item === meter));
+    const selected = selectedNativeSources();
+    if (!selected.length) return;
+    document.querySelectorAll(".source-level-preview").forEach((item) => {
+      const active = selected.some((input) => input.value === item.dataset.sourceMeter);
+      item.classList.toggle("active", active);
+      if (!active) item.querySelector("i").style.width = "0%";
+    });
     sourcePreviewBusy = true;
     try {
-      const result = await api(
-        `/api/audio/sources/${encodeURIComponent(selected.value)}/level`,
-      );
-      if (meter) {
-        meter.classList.remove("unavailable");
-        meter.querySelector("i").style.width =
-          `${Math.max(2, Math.round(Number(result.level || 0) * 100))}%`;
+      // Serialize native probes: PortAudio device manager lifecycles are not thread-safe.
+      for (const input of selected) {
+        if (!startDialog.open || selectedSourceMode() === "file") break;
+        if (!input.isConnected || !input.checked) continue;
+        const meter = document.querySelector(`[data-source-meter="${CSS.escape(input.value)}"]`);
+        try {
+          const result = await api(`/api/audio/sources/${encodeURIComponent(input.value)}/level`);
+          if (meter?.isConnected && input.checked && startDialog.open) {
+            meter.classList.remove("unavailable");
+            meter.querySelector("i").style.width = `${Math.round(Number(result.level || 0) * 100)}%`;
+          }
+        } catch {
+          meter?.classList.add("unavailable");
+        }
       }
-    } catch {
-      meter?.classList.add("unavailable");
     } finally {
       sourcePreviewBusy = false;
       scheduleSourcePreview(180);
@@ -1751,7 +1796,8 @@
     event.preventDefault();
     const submit = event.submitter;
     const mode = selectedSourceMode();
-    if (mode !== "file" && !document.querySelector('input[name="native-source"]:checked')) {
+    if (mode !== "file" && (!selectedLiveModes().length ||
+        selectedNativeSources().length !== selectedLiveModes().length)) {
       toast("Choose an available audio source.", "error");
       return;
     }
@@ -1785,12 +1831,12 @@
   }
 
   async function startNativeCapture() {
-    const selected = document.querySelector('input[name="native-source"]:checked');
-    if (!selected) throw new Error("Choose an available audio source.");
+    const selected = selectedNativeSources();
+    if (!selected.length) throw new Error("Choose an available audio source.");
     const session = await api("/api/capture/sessions", {
       method: "POST",
       body: JSON.stringify({
-        source_id: selected.value,
+        source_ids: selected.map((input) => input.value),
         ...transcriptionOptions(),
       }),
     });
@@ -1888,12 +1934,23 @@
     const paused = session.state === "paused";
     const strip = document.querySelector("#live-capture-strip");
     strip.classList.toggle("paused", paused);
-    strip.classList.toggle("transcription-error", session.realtime_status === "error");
-    document.querySelector("#live-source-name").textContent = session.source.name;
+    strip.classList.toggle("transcription-error", Boolean(session.capture_error) || session.realtime_status === "error");
+    const sources = session.sources?.length ? session.sources : [session.source];
+    document.querySelector("#live-source-name").textContent = sources.map((source) => source.name).join(" + ");
     document.querySelector("#live-capture-state").textContent =
-      paused ? "Capture paused" : session.realtime_message || "Transcribing locally";
+      session.capture_error || (paused ? "Capture paused" : session.realtime_message || "Transcribing locally");
     document.querySelector("#capture-elapsed").textContent = formatTimestamp(session.elapsed_ms);
     document.querySelector("#capture-level").style.width = `${Math.round((session.level || 0) * 100)}%`;
+    const inputLevels = document.querySelector("#live-input-levels");
+    inputLevels.classList.toggle("hidden", sources.length < 2);
+    if (sources.length > 1) {
+      inputLevels.innerHTML = sources.map((source) => {
+        const label = t(source.kind === "system" ? "capture.system_label" : "capture.microphone_label");
+        const level = paused ? 0 : Math.max(0, Math.min(1, session.source_levels?.[source.id] || 0));
+        return `<span class="live-input-level" title="${escapeHTML(source.name)}"><span>${escapeHTML(label)}</span>
+          <meter min="0" max="1" value="${level}" aria-label="${escapeHTML(label)}"></meter></span>`;
+      }).join("");
+    }
     document.querySelector("#pause-capture-label").textContent =
       paused ? "Resume transcription" : "Pause transcription";
     document.querySelector(".pause-symbol").classList.toggle("hidden", paused);
@@ -2539,9 +2596,20 @@
   document.querySelector("#start-transcription").addEventListener("click", openStartDialog);
   document.querySelector("#refresh-sources").addEventListener("click", refreshSources);
   document.querySelectorAll('input[name="source-mode"]').forEach((input) =>
-    input.addEventListener("change", renderSourceMode));
+    input.addEventListener("change", () => {
+      if (input.checked) {
+        document.querySelectorAll('input[name="source-mode"]').forEach((other) => {
+          if (input.value === "file" ? other.value !== "file" : other.value === "file") other.checked = false;
+        });
+      }
+      renderSourceMode();
+    }));
   document.querySelector("#native-source-list").addEventListener("change", (event) => {
-    if (event.target.matches('input[name="native-source"]')) scheduleSourcePreview(20);
+    if (event.target.matches("[data-native-source]")) {
+      rememberSelectedDevices();
+      syncCaptureSelection();
+      scheduleSourcePreview(20);
+    }
   });
   document.querySelectorAll("[data-close-transcription]").forEach((button) =>
     button.addEventListener("click", () => {

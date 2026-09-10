@@ -247,6 +247,11 @@ class ImportService:
             metadata={
                 "capture_source_id": captured.source.id,
                 "capture_source_name": captured.source.name,
+                "capture_sources": [
+                    {"id": source.id, "name": source.name, "kind": source.kind,
+                     "sample_rate": source.sample_rate, "channels": source.channels}
+                    for source in (captured.sources or (captured.source,))
+                ],
                 "capture_backend": captured.source.backend,
                 "capture_host_api": captured.source.host_api,
                 "is_loopback": captured.source.is_loopback,

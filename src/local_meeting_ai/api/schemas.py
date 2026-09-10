@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from typing import Any, Literal, Self
+from typing import Annotated, Any, Literal, Self
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
@@ -688,12 +688,25 @@ class AudioSourcesResponse(BaseModel):
 class LiveCaptureStart(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
-    source_id: str = Field(min_length=1, max_length=200)
+    source_id: str | None = Field(default=None, min_length=1, max_length=200)
+    source_ids: list[Annotated[str, Field(min_length=1, max_length=200)]] | None = Field(
+        default=None,
+        min_length=1,
+        max_length=2,
+    )
     title: str | None = Field(default=None, min_length=1, max_length=200)
     profile_id: str = Field(default="default", max_length=40)
     language: str | None = Field(default=None, max_length=20)
     task: Literal["transcribe", "translate"] | None = None
     allow_model_download: bool = False
+
+    @model_validator(mode="after")
+    def validate_sources(self) -> Self:
+        if (self.source_id is None) == (self.source_ids is None):
+            raise ValueError("Provide either source_id or source_ids")
+        if self.source_ids and len(set(self.source_ids)) != len(self.source_ids):
+            raise ValueError("Audio sources must be different")
+        return self
 
 
 class LiveCaptureStop(BaseModel):
@@ -712,6 +725,9 @@ class LiveCaptureSessionResponse(BaseModel):
     title: str
     state: Literal["recording", "paused", "stopped"]
     source: AudioCaptureSourceResponse
+    sources: list[AudioCaptureSourceResponse] = Field(default_factory=list)
+    source_levels: dict[str, float] = Field(default_factory=dict)
+    capture_error: str | None = None
     elapsed_ms: int
     level: float
     started_at: str

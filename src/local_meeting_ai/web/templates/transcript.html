@@ -99,6 +99,7 @@
         <span id="capture-level"></span>
       </div>
       <time id="capture-elapsed">00:00</time>
+      <div class="live-input-levels hidden" id="live-input-levels" aria-label="Audio input levels"></div>
     </div>
 
     <section class="live-ai-assistant-widget hidden" id="live-ai-assistant" aria-label="Live AI Assistant" data-collapsed="false">
@@ -325,33 +326,33 @@
     <div class="modal-header capture-modal-header">
       <div>
         <span class="eyebrow">New transcription</span>
-        <h2>Choose your audio source</h2>
-        <p>Like a studio input panel, but everything stays on this computer.</p>
+        <h2>Choose your audio sources</h2>
+        <p>For a video call, combine your microphone with system audio.</p>
       </div>
       <button type="button" class="icon-button close-button" data-close-transcription aria-label="Close">
         <svg viewBox="0 0 24 24" aria-hidden="true"><path d="m6 6 12 12M18 6 6 18"/></svg>
       </button>
     </div>
 
-    <div class="source-mode-grid" role="radiogroup" aria-label="Audio source type">
+    <div class="source-mode-grid" role="group" aria-label="Audio sources" aria-describedby="source-selection-summary">
       <label class="source-mode-card">
-        <input type="radio" name="source-mode" value="microphone" checked>
+        <input type="checkbox" name="source-mode" value="microphone" checked>
         <span class="source-mode-icon microphone">
           <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3a3 3 0 0 0-3 3v6a3 3 0 0 0 6 0V6a3 3 0 0 0-3-3Z"/><path d="M5 11v1a7 7 0 0 0 14 0v-1M12 19v3M8 22h8"/></svg>
         </span>
-        <span><strong>Microphone</strong><small>Built-in, USB, mixer or audio interface</small></span>
+        <span><strong>Microphone</strong><small>Your voice · built-in, USB or interface</small></span>
         <i></i>
       </label>
       <label class="source-mode-card">
-        <input type="radio" name="source-mode" value="system">
+        <input type="checkbox" name="source-mode" value="system">
         <span class="source-mode-icon system">
           <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="4" width="18" height="13" rx="2"/><path d="M8 21h8M12 17v4M8 10h2l2-3 3 6 2-3h2"/></svg>
         </span>
-        <span><strong>System audio</strong><small>Calls, browser, players and desktop mix</small></span>
+        <span><strong>System audio</strong><small>Other participants · headphones or speakers</small></span>
         <i></i>
       </label>
       <label class="source-mode-card">
-        <input type="radio" name="source-mode" value="file">
+        <input type="checkbox" name="source-mode" value="file">
         <span class="source-mode-icon file">
           <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7 3h7l4 4v14H7zM14 3v5h5M10 13h5M10 17h5"/></svg>
         </span>
@@ -359,11 +360,12 @@
         <i></i>
       </label>
     </div>
+    <div class="source-selection-summary" id="source-selection-summary" role="status" aria-live="polite"></div>
 
     <section class="source-picker-panel" id="native-source-panel">
       <div class="source-picker-heading">
         <div>
-          <strong id="source-picker-title">Available microphones</strong>
+          <strong id="source-picker-title">Recording inputs</strong>
           <span id="capture-platform">Detecting native audio system…</span>
         </div>
         <button type="button" class="icon-button" id="refresh-sources" aria-label="Refresh audio sources" title="Refresh sources">
