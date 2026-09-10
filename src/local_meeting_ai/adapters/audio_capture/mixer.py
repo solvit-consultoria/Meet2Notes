@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from collections import deque
 from dataclasses import dataclass, field
-from typing import Any
+from typing import Any, cast
 
 import numpy as np
 
@@ -84,7 +84,7 @@ class AudioMixer:
             track.blocks.popleft()
 
     def read(self, count: int) -> bytes:
-        mixed = np.zeros(count, dtype=np.float64)
+        mixed: Any = np.zeros(count, dtype=np.float64)
         end = self.frame + count
         for track in self.inputs.values():
             for start, samples in track.blocks:
@@ -97,7 +97,12 @@ class AudioMixer:
                 track.blocks.popleft()
         self.frame = end
         # Fixed headroom avoids clipping when both people speak at the same time.
-        return np.clip(np.rint(mixed / len(self.inputs)), -32768, 32767).astype("<i2").tobytes()
+        return cast(
+            bytes,
+            np.clip(np.rint(mixed / len(self.inputs)), -32768, 32767)
+            .astype("<i2")
+            .tobytes(),
+        )
 
     def levels(self, timestamp: float) -> dict[str, float]:
         return {
