@@ -23,6 +23,11 @@
   const activityOutput = document.querySelector("#activity-log-output");
   const activityResizer = document.querySelector("#activity-log-resizer");
   const activityLogToggle = document.querySelector("#toggle-activity-log");
+  const performancePanel = document.querySelector("#activity-performance");
+  const performanceStatus = document.querySelector("#activity-performance-status");
+  const systemMemoryValue = document.querySelector("#activity-system-memory-value");
+  const systemMemoryBar = document.querySelector("#activity-system-memory-bar");
+  const processMemoryValue = document.querySelector("#activity-process-memory-value");
   const transcriptionWorkspace = document.querySelector("#transcription-workspace");
   const postprocessDialog = document.querySelector("#postprocess-dialog");
   const postprocessLogOutput = document.querySelector("#postprocess-log");
@@ -71,9 +76,14 @@
   let terminalJobIds = new Set();
   let sourcePreviewTimer = null;
   let sourcePreviewBusy = false;
+  let sourcePreviewSuppressed = false;
+  let sourceTest = null;
+  let sourceProbePending = null;
   const selectedDevices = { microphone: null, system: null };
   const capturePreferencesKey = "meet2notes.capture-preferences.v1";
   let latestActivityId = 0;
+  let performancePollTimer = null;
+  let performancePollBusy = false;
   let postprocessMeetingId = null;
   let workflowVisible = false;
   let workflowDismissed = false;
@@ -169,6 +179,8 @@
     setActivityLogHeight(storedHeight);
     const updateCollapsedState = (collapsed) => {
       transcriptionWorkspace.classList.toggle("activity-log-collapsed", collapsed);
+      if (collapsed && performancePanel.open) performancePanel.open = false;
+      syncPerformancePolling();
       activityLogToggle.setAttribute("aria-expanded", String(!collapsed));
       activityLogToggle.dataset.i18n = collapsed ? "activity.show" : "activity.hide";
       activityLogToggle.textContent = t(activityLogToggle.dataset.i18n);
@@ -183,6 +195,14 @@
       isCollapsed = !transcriptionWorkspace.classList.contains("activity-log-collapsed");
       updateCollapsedState(isCollapsed);
     });
+    performancePanel.addEventListener("toggle", () => {
+      if (transcriptionWorkspace.classList.contains("activity-log-collapsed")) {
+        performancePanel.open = false;
+        return;
+      }
+      syncPerformancePolling();
+    });
+    document.addEventListener("visibilitychange", syncPerformancePolling);
 
     activityResizer.addEventListener("pointerdown", (event) => {
       event.preventDefault();
@@ -227,6 +247,66 @@
         message: `Could not load activity: ${error.message}`,
       }]);
     });
+  }
+
+  function performancePanelIsVisible() {
+    return performancePanel.open && !document.hidden &&
+      !transcriptionWorkspace.classList.contains("activity-log-collapsed");
+  }
+
+  function stopPerformancePolling() {
+    if (performancePollTimer) window.clearTimeout(performancePollTimer);
+    performancePollTimer = null;
+  }
+
+  function syncPerformancePolling() {
+    stopPerformancePolling();
+    if (performancePanelIsVisible()) void pollPerformanceMetrics();
+  }
+
+  function memoryLabel(value) {
+    return typeof value === "number" && Number.isFinite(value) && value >= 0
+      ? formatBytes(value)
+      : t("performance.unavailable");
+  }
+
+  async function pollPerformanceMetrics() {
+    if (!performancePanelIsVisible() || performancePollBusy) return;
+    performancePollBusy = true;
+    try {
+      const metrics = await api("/api/system/performance");
+      systemMemoryValue.textContent = t("performance.system_value", {
+        available: memoryLabel(metrics.available_bytes),
+        total: memoryLabel(metrics.total_bytes),
+        percent: typeof metrics.percent === "number" && Number.isFinite(metrics.percent)
+          ? metrics.percent.toFixed(0)
+          : "—",
+      });
+      processMemoryValue.textContent = memoryLabel(metrics.process_bytes);
+      const percent = typeof metrics.percent === "number" && Number.isFinite(metrics.percent)
+        ? Math.max(0, Math.min(100, metrics.percent))
+        : 0;
+      systemMemoryBar.setAttribute("aria-valuenow", String(Math.round(percent)));
+      systemMemoryBar.querySelector("i").style.width = `${percent}%`;
+      performanceStatus.textContent = [
+        metrics.total_bytes,
+        metrics.available_bytes,
+        metrics.process_bytes,
+      ].some((value) => typeof value === "number" && Number.isFinite(value))
+        ? t("performance.updated")
+        : t("performance.unavailable");
+    } catch (_error) {
+      systemMemoryValue.textContent = t("performance.unavailable");
+      processMemoryValue.textContent = t("performance.unavailable");
+      systemMemoryBar.setAttribute("aria-valuenow", "0");
+      systemMemoryBar.querySelector("i").style.width = "0%";
+      performanceStatus.textContent = t("performance.unavailable");
+    } finally {
+      performancePollBusy = false;
+      if (performancePanelIsVisible()) {
+        performancePollTimer = window.setTimeout(pollPerformanceMetrics, 5000);
+      }
+    }
   }
 
   async function loadWorkspace() {
@@ -497,6 +577,8 @@
   }
 
   async function refreshSources() {
+    cancelSourceTest({ reset: true });
+    stopSourcePreview();
     rememberSelectedDevices();
     const list = document.querySelector("#native-source-list");
     list.innerHTML = '<div class="source-loading"><i class="mini-spinner"></i> Scanning audio devices…</div>';
@@ -525,6 +607,7 @@
   }
 
   function renderSourceMode() {
+    if (sourceTest) cancelSourceTest({ reset: true });
     rememberSelectedDevices();
     const mode = selectedSourceMode();
     const nativePanel = document.querySelector("#native-source-panel");
@@ -542,6 +625,7 @@
       : mode === "combined" ? "capture.combined_summary"
         : modes.length ? "capture.single_summary" : "capture.choose_sources");
     if (mode === "file") {
+      cancelSourceTest({ reset: true });
       stopSourcePreview();
       document.querySelector("#transcription-submit").disabled = false;
       return;
@@ -557,18 +641,27 @@
         || (!selectedDevices[kind] && (available.find((source) => source.is_default) || available[0]));
       if (selected) selectedDevices[kind] = selected.id;
       const options = candidates.map((source) => `
-        <label class="native-source-option" title="${escapeHTML(displaySourceName(source))}">
-          <input type="radio" name="native-source-${kind}" data-native-source="${kind}" value="${escapeHTML(source.id)}"
-            ${selected?.id === source.id ? "checked" : ""} ${source.available === false ? "disabled" : ""}>
-          <span>
-            <strong>${escapeHTML(displaySourceName(source))}</strong>
-            <small>${source.available === false ? escapeHTML(source.unavailable_reason || t("capture.unavailable"))
-              : source.is_default ? t("capture.default_device") : t("capture.available_device")}</small>
-          </span>
-          <span class="source-level-preview" data-source-meter="${escapeHTML(source.id)}" aria-label="Live input level">
-            <i></i>
-          </span>
-        </label>`).join("");
+        <div class="native-source-option" data-source-option="${escapeHTML(source.id)}">
+          <label class="native-source-select" title="${escapeHTML(displaySourceName(source))}">
+            <input type="radio" name="native-source-${kind}" data-native-source="${kind}" value="${escapeHTML(source.id)}"
+              ${selected?.id === source.id ? "checked" : ""} ${source.available === false ? "disabled" : ""}>
+            <span>
+              <strong>${escapeHTML(displaySourceName(source))}</strong>
+              <small>${source.available === false ? escapeHTML(source.unavailable_reason || t("capture.unavailable"))
+                : source.is_default ? t("capture.default_device") : t("capture.available_device")}</small>
+            </span>
+          </label>
+          <div class="source-test-meter">
+            <span class="source-level-preview" data-source-meter="${escapeHTML(source.id)}" role="meter"
+              aria-label="${escapeHTML(t("capture.audio_level"))}" aria-valuemin="0" aria-valuemax="1" aria-valuenow="0"
+              aria-valuetext="${escapeHTML(t("capture.test_idle"))}">
+              <i></i>
+            </span>
+            <small data-source-status="${escapeHTML(source.id)}" aria-live="polite">${t("capture.test_idle")}</small>
+          </div>
+          <button class="source-test-button" type="button" data-test-source="${escapeHTML(source.id)}"
+            ${source.available === false ? "disabled" : ""} aria-pressed="false">${t("capture.test_audio")}</button>
+        </div>`).join("");
       return `<fieldset class="source-input-group"><legend>${t(`capture.${kind}_label`)}</legend>
         <p>${t(`capture.${kind}_hint`)}</p><div class="source-device-options">${options ||
           `<div class="source-empty">${t(`capture.no_${kind}`)}</div>`}</div>
@@ -640,13 +733,15 @@
     document.querySelectorAll(".source-level-preview").forEach((meter) => {
       meter.classList.remove("active", "unavailable");
       meter.querySelector("i").style.width = "0%";
+      meter.setAttribute("aria-valuenow", "0");
     });
   }
 
   function scheduleSourcePreview(delay = 500) {
     if (sourcePreviewTimer) window.clearTimeout(sourcePreviewTimer);
     sourcePreviewTimer = null;
-    if (!startDialog.open || selectedSourceMode() === "file") {
+    if (sourceTest || sourcePreviewSuppressed) return;
+    if (!startDialog.open || selectedSourceMode() === "file" || captureSession) {
       stopSourcePreview();
       return;
     }
@@ -654,7 +749,11 @@
   }
 
   async function pollSourcePreview() {
-    if (sourcePreviewBusy || !startDialog.open) {
+    if (captureSession || !startDialog.open) {
+      stopSourcePreview();
+      return;
+    }
+    if (sourcePreviewBusy || sourceTest) {
       scheduleSourcePreview(250);
       return;
     }
@@ -676,7 +775,7 @@
           const result = await api(`/api/audio/sources/${encodeURIComponent(input.value)}/level`);
           if (meter?.isConnected && input.checked && startDialog.open) {
             meter.classList.remove("unavailable");
-            meter.querySelector("i").style.width = `${Math.round(Number(result.level || 0) * 100)}%`;
+            updateSourceMeter(meter, Number(result.level || 0));
           }
         } catch {
           meter?.classList.add("unavailable");
@@ -684,8 +783,116 @@
       }
     } finally {
       sourcePreviewBusy = false;
-      scheduleSourcePreview(1500);
+      if (!sourceTest && !sourcePreviewSuppressed) scheduleSourcePreview(1500);
     }
+  }
+
+  function updateSourceMeter(meter, level) {
+    const safeLevel = Math.max(0, Math.min(1, Number(level) || 0));
+    meter.querySelector("i").style.width = `${Math.round(safeLevel * 100)}%`;
+    meter.setAttribute("aria-valuenow", safeLevel.toFixed(2));
+    const state = safeLevel < 0.015 ? "no_signal" : safeLevel < 0.15 ? "low" : "clear";
+    meter.setAttribute("aria-valuetext", t(`capture.test_${state}`));
+    return state;
+  }
+
+  function cancelSourceTest({ reset = false, completed = false, resumePreview = true } = {}) {
+    const current = sourceTest;
+    if (!current) return;
+    sourceTest = null;
+    window.clearTimeout(current.timer);
+    current.controller.abort();
+    const row = document.querySelector(`[data-source-option="${CSS.escape(current.sourceId)}"]`);
+    const meter = document.querySelector(`[data-source-meter="${CSS.escape(current.sourceId)}"]`);
+    const status = row?.querySelector("[data-source-status]");
+    row?.classList.remove("source-testing");
+    meter?.classList.remove("test-active");
+    if (current.button?.isConnected) {
+      current.button.textContent = t("capture.test_audio");
+      current.button.setAttribute("aria-pressed", "false");
+    }
+    if (reset && meter?.isConnected) {
+      updateSourceMeter(meter, 0);
+      meter.setAttribute("aria-valuetext", t("capture.test_idle"));
+      if (status) status.textContent = t("capture.test_idle");
+    } else if (completed && status) {
+      status.textContent = t(`capture.test_${current.lastState || "no_signal"}`);
+    }
+    if (resumePreview && startDialog.open && selectedSourceMode() !== "file") {
+      scheduleSourcePreview(250);
+    }
+  }
+
+  async function testAudioSource(sourceId, button) {
+    if (captureSession || document.querySelector("#transcription-form").dataset.busy) {
+      const status = document.querySelector(`[data-source-status="${CSS.escape(sourceId)}"]`);
+      if (status) status.textContent = t("capture.test_blocked");
+      return;
+    }
+    if (sourceTest?.sourceId === sourceId) {
+      cancelSourceTest({ completed: true });
+      return;
+    }
+    cancelSourceTest({ reset: true });
+    const meter = document.querySelector(`[data-source-meter="${CSS.escape(sourceId)}"]`);
+    const row = document.querySelector(`[data-source-option="${CSS.escape(sourceId)}"]`);
+    const status = row?.querySelector("[data-source-status]");
+    if (!meter || !row || !status || !startDialog.open) return;
+    stopSourcePreview();
+    const state = {
+      sourceId,
+      button,
+      controller: new AbortController(),
+      startedAt: performance.now(),
+      lastState: null,
+      timer: null,
+    };
+    sourceTest = state;
+    button.textContent = t("capture.test_stop");
+    button.setAttribute("aria-pressed", "true");
+    row.classList.add("source-testing");
+    meter.classList.add("active", "test-active");
+    status.textContent = t("capture.test_prompt");
+
+    const sample = async () => {
+      if (sourceTest !== state || !startDialog.open) return;
+      if (captureSession) {
+        cancelSourceTest({ reset: true });
+        return;
+      }
+      if (sourcePreviewBusy) {
+        state.timer = window.setTimeout(sample, 120);
+        return;
+      }
+      try {
+        const request = api(`/api/audio/sources/${encodeURIComponent(sourceId)}/level`, {
+          signal: state.controller.signal,
+        });
+        state.request = request;
+        sourceProbePending = request;
+        const result = await request;
+        if (sourceProbePending === request) sourceProbePending = null;
+        if (sourceTest !== state || !startDialog.open) return;
+        const nextState = updateSourceMeter(meter, result.level);
+        if (nextState !== state.lastState) {
+          state.lastState = nextState;
+          status.textContent = t(`capture.test_${state.lastState}`);
+        }
+      } catch (error) {
+        if (sourceProbePending === state.request) sourceProbePending = null;
+        if (sourceTest !== state || error.name === "AbortError") return;
+        status.textContent = t("capture.test_error");
+        cancelSourceTest();
+        meter.classList.add("unavailable");
+        return;
+      }
+      if (performance.now() - state.startedAt >= 3000) {
+        cancelSourceTest({ completed: true });
+      } else {
+        state.timer = window.setTimeout(sample, 500);
+      }
+    };
+    void sample();
   }
 
   async function selectTranscription(transcriptionId) {
@@ -1918,6 +2125,7 @@
   }
 
   function openStartDialog() {
+    sourcePreviewSuppressed = false;
     document.querySelector("#transcription-form").reset();
     document.querySelector('input[name="source-mode"][value="microphone"]').checked = true;
     // A meeting needs both sides of the call. The device picker below still
@@ -1932,11 +2140,16 @@
 
   async function submitTranscription(event) {
     event.preventDefault();
+    sourcePreviewSuppressed = true;
+    stopSourcePreview();
+    if (sourceProbePending) await sourceProbePending.catch(() => {});
     const submit = event.submitter;
     const mode = selectedSourceMode();
     if (mode !== "file" && (!selectedLiveModes().length ||
         selectedNativeSources().length !== selectedLiveModes().length)) {
       toast("Choose an available audio source.", "error");
+      sourcePreviewSuppressed = false;
+      scheduleSourcePreview(250);
       return;
     }
     stopSourcePreview();
@@ -1954,6 +2167,7 @@
       toast(error.message, "error");
       submit.disabled = false;
       delete document.querySelector("#transcription-form").dataset.busy;
+      sourcePreviewSuppressed = false;
       if (!startDialog.open) startDialog.showModal();
       scheduleSourcePreview();
     }
@@ -2756,19 +2970,32 @@
     }));
   document.querySelector("#native-source-list").addEventListener("change", (event) => {
     if (event.target.matches("[data-native-source]")) {
+      if (sourceTest && sourceTest.sourceId !== event.target.value) cancelSourceTest({ reset: true });
       rememberSelectedDevices();
       syncCaptureSelection();
       scheduleSourcePreview(20);
     }
   });
+  document.querySelector("#native-source-list").addEventListener("click", (event) => {
+    const button = event.target.closest("[data-test-source]");
+    if (!button) return;
+    event.preventDefault();
+    event.stopPropagation();
+    void testAudioSource(button.dataset.testSource, button);
+  });
   document.querySelectorAll("[data-close-transcription]").forEach((button) =>
     button.addEventListener("click", () => {
       if (!document.querySelector("#transcription-form").dataset.busy) {
+        cancelSourceTest({ reset: true });
         stopSourcePreview();
         startDialog.close();
       }
     }));
-  startDialog.addEventListener("close", stopSourcePreview);
+  startDialog.addEventListener("close", () => {
+    cancelSourceTest({ reset: true });
+    stopSourcePreview();
+  });
+  document.querySelector("#transcription-form").addEventListener("submit", () => cancelSourceTest({ reset: true, resumePreview: false }));
   document.querySelector("#transcription-form").addEventListener("submit", submitTranscription);
   document.querySelector("#capture-file").addEventListener("change", (event) => {
     const file = event.target.files[0];

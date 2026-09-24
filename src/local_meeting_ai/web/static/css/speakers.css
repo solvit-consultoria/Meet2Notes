@@ -30,3 +30,20 @@
 [data-theme="dark"] .saved-voice small {
   color: #91a0b5;
 }
+
+.voice-consent,.voice-recorder { display:grid; gap:10px; margin-top:16px; padding:14px; border:1px solid var(--border, #e1e7ef); border-radius:10px; background:var(--surface-subtle, #fbfcfe); }
+.voice-consent p,.voice-recorder small { margin:0; color:var(--muted, #667085); font-size:12px; line-height:1.5; }
+.voice-consent label { display:flex; align-items:flex-start; gap:8px; font-size:13px; }
+.voice-consent input { margin-top:3px; }
+.voice-recorder-status { min-height:22px; font-size:13px; }
+.voice-recorder-status[data-state="recording"] { color:#b42318; font-weight:700; }
+.voice-recorder-status[data-state="working"] { color:#176bff; }
+.voice-recorder-status[data-state="error"] { color:#b42318; }
+.voice-recorder-controls { display:flex; gap:8px; flex-wrap:wrap; }
+.voice-recorder audio { width:100%; height:40px; }
+.voice-upload-fallback { margin-top:14px; }
+.voice-upload-fallback summary { cursor:pointer; color:var(--muted, #667085); font-size:13px; }
+.voice-upload-fallback .drop-zone { margin-top:10px; }
+#speaker-save-profile:disabled { opacity:.55; cursor:not-allowed; }
+[data-theme="dark"] :is(.voice-consent, .voice-recorder) { background:#151d29; border-color:#2b3749; color:#dbe4f0; }
+[data-theme="dark"] .voice-consent p,[data-theme="dark"] .voice-recorder small,[data-theme="dark"] .voice-upload-fallback summary { color:#91a0b5; }

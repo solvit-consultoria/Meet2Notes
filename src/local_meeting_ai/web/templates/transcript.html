@@ -314,6 +314,24 @@
       </div>
       <button type="button" class="text-button" id="clear-activity-log">Clear view</button>
       <button type="button" class="text-button activity-log-toggle" id="toggle-activity-log" aria-controls="activity-log-output" aria-expanded="true" data-i18n="activity.hide">Hide log</button>
+      <details class="activity-performance" id="activity-performance">
+        <summary aria-label="Local performance" data-i18n-aria-label="performance.title" data-i18n="performance.summary">RAM</summary>
+        <div class="activity-performance-popover" role="group" aria-labelledby="activity-performance-title">
+          <div class="activity-performance-heading">
+            <strong id="activity-performance-title" data-i18n="performance.title">Local performance</strong>
+            <span id="activity-performance-status" aria-live="polite" data-i18n="performance.loading">Reading local memory…</span>
+          </div>
+          <div class="activity-performance-metric">
+            <span data-i18n="performance.system_memory">System RAM available</span>
+            <strong id="activity-system-memory-value">—</strong>
+          </div>
+          <div class="activity-performance-track" role="progressbar" id="activity-system-memory-bar" aria-label="System RAM usage" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0" data-i18n-aria-label="performance.usage_label"><i></i></div>
+          <div class="activity-performance-metric">
+            <span data-i18n="performance.process_memory">App memory</span>
+            <strong id="activity-process-memory-value">—</strong>
+          </div>
+        </div>
+      </details>
     </header>
     <textarea
       id="activity-log-output"

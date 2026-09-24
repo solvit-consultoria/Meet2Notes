@@ -146,7 +146,21 @@ def test_web_pages_and_security_headers(client: TestClient) -> None:
     speakers = client.get("/speakers")
     assert speakers.status_code == 200
     assert 'data-close-dialog aria-label="Close"' in speakers.text
-    assert 'data-close-dialog>Cancel</button>' in speakers.text
+    assert 'data-close-dialog data-i18n="common.cancel">Cancel</button>' in speakers.text
+
+
+def test_speaker_profile_dialog_records_only_after_explicit_consent(client: TestClient) -> None:
+    page = client.get("/speakers")
+    assert page.status_code == 200
+    assert 'id="speaker-record-consent" type="checkbox" required' in page.text
+    assert 'id="speaker-record-start"' in page.text
+    assert 'id="speaker-sample-preview" controls hidden' in page.text
+    assert 'name="file" type="file" accept=".wav,.mp3"' in page.text
+    script = client.get("/static/js/speakers.js").text
+    assert 'getUserMedia({ audio:' in script
+    assert 'await api("/api/capture/session")' in script
+    assert 'new File([pcm], "voice-sample.wav"' in script
+    assert 'dialog.addEventListener("close", stopAndReleaseRecorder)' in script
 
 
 def test_application_shutdown_uses_the_cli_graceful_shutdown_callback(client: TestClient) -> None:
