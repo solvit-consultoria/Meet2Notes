@@ -589,6 +589,19 @@ explains the change and a progress dialog streams the package installation log
 while the CUDA PyTorch runtime is installed into `.venv`. Restart the
 application after the upgrade.
 
+For an existing Windows MVP installation, close Meet2Notes and install the
+NVIDIA CUDA libraries used by Faster Whisper into its virtual environment.
+PyTorch CUDA is a separate runtime and is not required for Faster Whisper:
+
+```powershell
+.\.venv\Scripts\python.exe -m pip install --upgrade nvidia-cublas-cu12 nvidia-cudnn-cu12
+```
+
+Restart Meet2Notes after installation, then verify CUDA with a short
+transcription before processing a long recording. On GPUs with 4 GB of VRAM,
+the `small` model with `int8_float16` is a reasonable starting point, but
+available memory and other workloads affect whether it fits and performs well.
+
 Useful installer options:
 
 ```powershell

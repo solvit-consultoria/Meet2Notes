@@ -239,6 +239,14 @@ Invoke-Checked $EnvironmentPython @(
     "--index-url", $TorchIndex
 )
 
+if ($ResolvedBackend -eq "cuda") {
+    Write-Step "Installing NVIDIA CUDA libraries required by Faster Whisper"
+    Invoke-Checked $EnvironmentPython @(
+        "-m", "pip", "install", "--upgrade",
+        "nvidia-cublas-cu12", "nvidia-cudnn-cu12"
+    )
+}
+
 Invoke-Checked $EnvironmentPython @(
     "-m", "pip", "install", "-e", ".[capture,transcription,diarization,nvidia-asr,pyannote-diarization]"
 )

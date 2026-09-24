@@ -6,6 +6,7 @@ import importlib
 import importlib.util
 import logging
 import math
+import os
 import sys
 import threading
 from concurrent.futures import ThreadPoolExecutor
@@ -35,6 +36,11 @@ from local_meeting_ai.domain.protocols import (
 )
 
 logger = logging.getLogger(__name__)
+
+# Windows only keeps DLL search handles alive for as long as the directory is
+# registered. Keep them for the process lifetime so CTranslate2 can load CUDA
+# dependencies lazily during model construction.
+_CUDA_DLL_DIRECTORY_HANDLES: list[Any] = []
 
 
 class FasterWhisperEngine:
@@ -485,6 +491,41 @@ def _optional_float(value: Any) -> float | None:
         return None
 
 
+def _register_cuda_wheel_dll_directories(
+    search_paths: Any = None,
+    *,
+    add_dll_directory: Any = None,
+) -> bool:
+    """Expose CUDA DLLs from NVIDIA pip wheels without changing global PATH."""
+    if sys.platform != "win32":
+        return True
+
+    paths = list(sys.path if search_paths is None else search_paths)
+    add_directory = add_dll_directory or os.add_dll_directory
+    bin_directories: list[Path] = []
+    for root in paths:
+        if not root:
+            continue
+        for package in ("cublas", "cudnn"):
+            candidate = Path(root) / "nvidia" / package / "bin"
+            if candidate.is_dir() and candidate not in bin_directories:
+                bin_directories.append(candidate)
+
+    for directory in bin_directories:
+        # Do not close these handles: Windows uses their lifetime to maintain
+        # the DLL search path, including for later native lazy loads.
+        _CUDA_DLL_DIRECTORY_HANDLES.append(add_directory(str(directory)))
+
+    import ctypes
+
+    try:
+        ctypes.WinDLL("cublas64_12.dll")
+        ctypes.WinDLL("cudnn64_9.dll")
+    except OSError:
+        return False
+    return True
+
+
 def _detect_runtime_capability() -> dict[str, Any]:
     available = importlib.util.find_spec("faster_whisper") is not None
     cuda_devices = 0
@@ -500,12 +541,10 @@ def _detect_runtime_capability() -> dict[str, Any]:
             if cuda_devices and sys.platform == "win32":
                 # A driver can expose the GPU while the CUDA math runtime
                 # required for inference is absent. Prefer a working CPU path.
-                import ctypes
-
-                try:
-                    ctypes.WinDLL("cublas64_12.dll")
-                except OSError:
-                    logger.warning("CUDA GPU detected without cublas64_12.dll; using CPU")
+                if not _register_cuda_wheel_dll_directories():
+                    logger.warning(
+                        "CUDA GPU detected without the required cuBLAS/cuDNN DLLs; using CPU"
+                    )
                     cuda_devices = 0
             compute_types["cpu"] = sorted(
                 ctranslate2.get_supported_compute_types("cpu")
