@@ -315,7 +315,7 @@
       <button type="button" class="text-button" id="clear-activity-log">Clear view</button>
       <button type="button" class="text-button activity-log-toggle" id="toggle-activity-log" aria-controls="activity-log-output" aria-expanded="true" data-i18n="activity.hide">Hide log</button>
       <details class="activity-performance" id="activity-performance">
-        <summary aria-label="Local performance" data-i18n-aria-label="performance.title" data-i18n="performance.summary">RAM</summary>
+        <summary aria-label="Local performance" data-i18n-aria-label="performance.title" data-i18n="performance.summary">Resources</summary>
         <div class="activity-performance-popover" role="group" aria-labelledby="activity-performance-title">
           <div class="activity-performance-heading">
             <strong id="activity-performance-title" data-i18n="performance.title">Local performance</strong>
@@ -329,6 +329,18 @@
           <div class="activity-performance-metric">
             <span data-i18n="performance.process_memory">App memory</span>
             <strong id="activity-process-memory-value">—</strong>
+          </div>
+          <div class="activity-performance-metric">
+            <span data-i18n="performance.cpu_usage">System CPU usage</span>
+            <strong id="activity-cpu-usage-value">—</strong>
+          </div>
+          <div class="activity-performance-metric">
+            <span data-i18n="performance.gpu_usage">System GPU usage</span>
+            <strong id="activity-gpu-usage-value">—</strong>
+          </div>
+          <div class="activity-performance-metric">
+            <span data-i18n="performance.gpu_memory">GPU memory (VRAM)</span>
+            <strong id="activity-gpu-memory-value">—</strong>
           </div>
         </div>
       </details>

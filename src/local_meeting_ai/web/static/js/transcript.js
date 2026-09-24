@@ -28,6 +28,9 @@
   const systemMemoryValue = document.querySelector("#activity-system-memory-value");
   const systemMemoryBar = document.querySelector("#activity-system-memory-bar");
   const processMemoryValue = document.querySelector("#activity-process-memory-value");
+  const cpuUsageValue = document.querySelector("#activity-cpu-usage-value");
+  const gpuUsageValue = document.querySelector("#activity-gpu-usage-value");
+  const gpuMemoryValue = document.querySelector("#activity-gpu-memory-value");
   const transcriptionWorkspace = document.querySelector("#transcription-workspace");
   const postprocessDialog = document.querySelector("#postprocess-dialog");
   const postprocessLogOutput = document.querySelector("#postprocess-log");
@@ -67,6 +70,7 @@
   let captureSession = null;
   let capturePollTimer = null;
   let capturePollBusy = false;
+  let capturePollStartedAt = 0;
   let lastInsightPollAt = 0;
   let lastAssistantPollAt = 0;
   let lastAssistantInsightId = null;
@@ -279,6 +283,12 @@
       : t("performance.unavailable");
   }
 
+  function percentageLabel(value) {
+    return typeof value === "number" && Number.isFinite(value) && value >= 0
+      ? `${Math.round(value)}%`
+      : t("performance.unavailable");
+  }
+
   async function pollPerformanceMetrics() {
     if (!performancePanelIsVisible() || performancePollBusy) return;
     performancePollBusy = true;
@@ -292,6 +302,12 @@
           : "—",
       });
       processMemoryValue.textContent = memoryLabel(metrics.process_bytes);
+      cpuUsageValue.textContent = percentageLabel(metrics.cpu_usage_percent);
+      gpuUsageValue.textContent = percentageLabel(metrics.gpu_usage_percent);
+      gpuMemoryValue.textContent = typeof metrics.gpu_memory_used_bytes === "number" &&
+        typeof metrics.gpu_memory_total_bytes === "number"
+        ? `${memoryLabel(metrics.gpu_memory_used_bytes)} / ${memoryLabel(metrics.gpu_memory_total_bytes)}`
+        : t("performance.unavailable");
       const percent = typeof metrics.percent === "number" && Number.isFinite(metrics.percent)
         ? Math.max(0, Math.min(100, metrics.percent))
         : 0;
@@ -307,6 +323,9 @@
     } catch (_error) {
       systemMemoryValue.textContent = t("performance.unavailable");
       processMemoryValue.textContent = t("performance.unavailable");
+      cpuUsageValue.textContent = t("performance.unavailable");
+      gpuUsageValue.textContent = t("performance.unavailable");
+      gpuMemoryValue.textContent = t("performance.unavailable");
       systemMemoryBar.setAttribute("aria-valuenow", "0");
       systemMemoryBar.querySelector("i").style.width = "0%";
       performanceStatus.textContent = t("performance.unavailable");
@@ -924,6 +943,7 @@
   }
 
   function renderTranscript(detail) {
+    const previousDetail = lastDetail;
     lastDetail = detail;
     const transcription = detail.transcription;
     const speakers = detail.speakers || [];
@@ -959,6 +979,7 @@
         return leftName.localeCompare(rightName) || left.start_ms - right.start_ms;
       });
     }
+    const appendOnlyLiveUpdate = canAppendLiveSegments(previousDetail, detail, segments);
     setTitle(transcription.title);
     renderMeetingResults(detail);
     document.querySelector("#editor-meta").textContent =
@@ -984,31 +1005,14 @@
         </div>`;
       return;
     }
-    segmentContainer.innerHTML = segments.map((segment) => {
-      const rawSpeaker = Number(segment.speaker_id);
-      const hasSpeaker = segment.speaker_id !== null && Number.isFinite(rawSpeaker);
-      const speakerNumber = hasSpeaker ? speakerNumbers.get(rawSpeaker) : null;
-      const speakerColor = hasSpeaker ? Math.abs(speakerNumber - 1) % 6 : null;
-      const provisional = !segment.is_final;
-      const timestampQuality = segment.metadata?.timestamp_quality || "recorded";
-      const timestampAvailable = timestampQuality !== "unavailable";
-      const timestampDescription = timestampQuality === "approximate"
-        ? "Tempo aproximado"
-        : timestampQuality === "unavailable" ? "Sem marcação de tempo" : "Reproduzir a partir deste ponto";
-      return `
-        <article class="segment-row ${hasSpeaker ? `speaker-color-${speakerColor}` : "speaker-pending"} ${provisional ? "live-segment" : ""}" data-segment-id="${segment.id}">
-          <button class="timestamp-button" data-seek-ms="${segment.start_ms}" title="${timestampDescription}" aria-label="${timestampDescription}" aria-pressed="false" ${timestampAvailable ? "" : "disabled"}>
-            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="m8 5 11 7-11 7V5Z"/></svg>
-          </button>
-          <div class="segment-cue">
-            <span class="segment-speaker"><i></i>${hasSpeaker ? escapeHTML(speakerNames.get(rawSpeaker) || t("speaker", { number: speakerNumber })) : "Speaker pending"}</span>
-            ${timestampQuality === "approximate" ? '<span class="engine-runtime-pill">Tempo aproximado</span>' : timestampQuality === "unavailable" ? '<span class="engine-runtime-pill">Sem marcação de tempo</span>' : ""}
-            ${provisional ? '<span class="live-segment-badge"><i></i> Live</span>' : ""}
-          </div>
-          <textarea class="segment-editor" rows="1" aria-label="Transcript segment ${segment.segment_index + 1}" ${provisional ? "readonly" : ""}>${escapeHTML(segment.text)}</textarea>
-          <button class="segment-save ${provisional ? "hidden" : ""}" data-save-segment="${segment.id}">Save</button>
-        </article>`;
-    }).join("");
+    const segmentsToRender = appendOnlyLiveUpdate
+      ? segments.slice(previousDetail.segments.length)
+      : segments;
+    const markup = segmentsToRender
+      .map((segment) => segmentRowHtml(segment, speakerNames, speakerNumbers))
+      .join("");
+    if (appendOnlyLiveUpdate) segmentContainer.insertAdjacentHTML("beforeend", markup);
+    else segmentContainer.innerHTML = markup;
     applySearch();
     applyAudioAvailability();
     if (captureSession) {
@@ -1958,6 +1962,55 @@
     if (!postprocessDialog.open) postprocessDialog.showModal();
   }
 
+  function canAppendLiveSegments(previousDetail, detail, visibleSegments) {
+    if (!captureSession || !previousDetail ||
+        Number(previousDetail.transcription?.id) !== Number(detail.transcription?.id) ||
+        document.querySelector("#transcript-speaker-filter").value !== "all" ||
+        document.querySelector("#transcript-order").value !== "time") return false;
+    const previous = previousDetail.segments || [];
+    const current = detail.segments || [];
+    const previousSpeakers = (previousDetail.speakers || [])
+      .map((speaker) => `${speaker.id}:${speaker.display_name}`).join("|");
+    const currentSpeakers = (detail.speakers || [])
+      .map((speaker) => `${speaker.id}:${speaker.display_name}`).join("|");
+    if (!previous.length || current.length <= previous.length ||
+        visibleSegments.length !== current.length ||
+        previousSpeakers !== currentSpeakers) return false;
+    return previous.every((segment, index) => {
+      const next = current[index];
+      return next && segment.segment_index === next.segment_index &&
+        segment.id === next.id && segment.text === next.text &&
+        segment.start_ms === next.start_ms && segment.end_ms === next.end_ms &&
+        segment.speaker_id === next.speaker_id && segment.is_final === next.is_final;
+    });
+  }
+
+  function segmentRowHtml(segment, speakerNames, speakerNumbers) {
+    const rawSpeaker = Number(segment.speaker_id);
+    const hasSpeaker = segment.speaker_id !== null && Number.isFinite(rawSpeaker);
+    const speakerNumber = hasSpeaker ? speakerNumbers.get(rawSpeaker) : null;
+    const speakerColor = hasSpeaker ? Math.abs(speakerNumber - 1) % 6 : null;
+    const provisional = !segment.is_final;
+    const timestampQuality = segment.metadata?.timestamp_quality || "recorded";
+    const timestampAvailable = timestampQuality !== "unavailable";
+    const timestampDescription = timestampQuality === "approximate"
+      ? "Tempo aproximado"
+      : timestampQuality === "unavailable" ? "Sem marcação de tempo" : "Reproduzir a partir deste ponto";
+    return `
+      <article class="segment-row ${hasSpeaker ? `speaker-color-${speakerColor}` : "speaker-pending"} ${provisional ? "live-segment" : ""}" data-segment-id="${segment.id}">
+        <button class="timestamp-button" data-seek-ms="${segment.start_ms}" title="${timestampDescription}" aria-label="${timestampDescription}" aria-pressed="false" ${timestampAvailable ? "" : "disabled"}>
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="m8 5 11 7-11 7V5Z"/></svg>
+        </button>
+        <div class="segment-cue">
+          <span class="segment-speaker"><i></i>${hasSpeaker ? escapeHTML(speakerNames.get(rawSpeaker) || t("speaker", { number: speakerNumber })) : "Speaker pending"}</span>
+          ${timestampQuality === "approximate" ? '<span class="engine-runtime-pill">Tempo aproximado</span>' : timestampQuality === "unavailable" ? '<span class="engine-runtime-pill">Sem marcação de tempo</span>' : ""}
+          ${provisional ? '<span class="live-segment-badge"><i></i> Live</span>' : ""}
+        </div>
+        <textarea class="segment-editor" rows="1" aria-label="Transcript segment ${segment.segment_index + 1}" ${provisional ? "readonly" : ""}>${escapeHTML(segment.text)}</textarea>
+        <button class="segment-save ${provisional ? "hidden" : ""}" data-save-segment="${segment.id}">Save</button>
+      </article>`;
+  }
+
   function configurePostprocessAvailability() {
     const diarizationRoot = engineCapabilities.diarization || {};
     const diarizationEngine = preferences.diarization?.engine || diarizationRoot.primary_engine;
@@ -2317,15 +2370,14 @@
     page.classList.add("capture-active");
     updateLiveState(session);
     void refreshLiveAssistant(true);
-    if (capturePollTimer) window.clearInterval(capturePollTimer);
-    capturePollTimer = window.setInterval(pollCapture, 500);
+    scheduleCapturePoll(0);
   }
 
   function clearLiveState() {
     captureSession = null;
     lastLiveSegmentCount = -1;
     capturePollBusy = false;
-    if (capturePollTimer) window.clearInterval(capturePollTimer);
+    if (capturePollTimer) window.clearTimeout(capturePollTimer);
     capturePollTimer = null;
     syncStartAction();
     document.querySelector("#live-actions").classList.add("hidden");
@@ -2369,9 +2421,22 @@
     document.querySelector(".resume-symbol").classList.toggle("hidden", !paused);
   }
 
+  function scheduleCapturePoll(delay = capturePollDelay()) {
+    if (capturePollTimer) window.clearTimeout(capturePollTimer);
+    if (!captureSession) return;
+    capturePollTimer = window.setTimeout(pollCapture, delay);
+  }
+
+  function capturePollDelay() {
+    if (document.hidden) return 4000;
+    if (captureSession?.state === "paused" || !liveTranscriptionEnabled) return 1800;
+    return 900;
+  }
+
   async function pollCapture() {
     if (capturePollBusy) return;
     capturePollBusy = true;
+    capturePollStartedAt = performance.now();
     try {
       const session = await api("/api/capture/session");
       if (!session) {
@@ -2387,6 +2452,10 @@
       // The next poll can recover a transient local request.
     } finally {
       capturePollBusy = false;
+      if (captureSession) {
+        const elapsed = performance.now() - capturePollStartedAt;
+        scheduleCapturePoll(Math.max(250, capturePollDelay() - elapsed));
+      }
     }
   }
 
@@ -3501,9 +3570,9 @@
       job.job_type === "transcribe" &&
       ["queued", "running", "paused"].includes(job.status));
     renderProgress(related || null);
-    if (activeTranscriptionId && related) {
-      await selectTranscription(activeTranscriptionId);
-    }
+    // Avoid fetching and rebuilding the full transcript for every progress
+    // event. Live capture refreshes on segment-count changes; background jobs
+    // refresh once when they reach a terminal state below.
     const terminal = jobs.filter((job) =>
       String(job.meeting_id) === String(meetingId) &&
       ["completed", "failed", "cancelled"].includes(job.status));
