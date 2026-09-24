@@ -72,6 +72,7 @@
   let sourcePreviewTimer = null;
   let sourcePreviewBusy = false;
   const selectedDevices = { microphone: null, system: null };
+  const capturePreferencesKey = "meet2notes.capture-preferences.v1";
   let latestActivityId = 0;
   let postprocessMeetingId = null;
   let workflowVisible = false;
@@ -511,6 +512,7 @@
   }
 
   function renderSources() {
+    restoreCapturePreferences();
     const platform = captureCapability.platform || "Local system";
     const nativeApi = captureCapability.native_api || captureCapability.backend || "audio";
     document.querySelector("#capture-platform").textContent =
@@ -604,6 +606,27 @@
     document.querySelectorAll("[data-native-source]:checked").forEach((input) => {
       selectedDevices[input.dataset.nativeSource] = input.value;
     });
+    persistCapturePreferences();
+  }
+
+  function restoreCapturePreferences() {
+    try {
+      const saved = JSON.parse(window.localStorage.getItem(capturePreferencesKey) || "{}");
+      if (saved && typeof saved === "object") {
+        if (typeof saved.microphone === "string") selectedDevices.microphone = saved.microphone;
+        if (typeof saved.system === "string") selectedDevices.system = saved.system;
+      }
+    } catch (_error) {
+      // Device selection remains available when browser storage is disabled.
+    }
+  }
+
+  function persistCapturePreferences() {
+    try {
+      window.localStorage.setItem(capturePreferencesKey, JSON.stringify(selectedDevices));
+    } catch (_error) {
+      // Device selection remains available when browser storage is disabled.
+    }
   }
 
   function syncCaptureSelection() {
@@ -1678,13 +1701,14 @@
 
   function openPostprocessOptions(kind) {
     pendingPostprocessKind = kind;
-      workflowVisible = false;
-      workflowCompleted = false;
-      const isImport = kind === "import";
-      const finalPass = document.querySelector("#postprocess-final-pass");
-      document.querySelector("#postprocess-diarization").checked = true;
+    workflowVisible = false;
+    workflowCompleted = false;
+    const isImport = kind === "import";
+    const finalPass = document.querySelector("#postprocess-final-pass");
+    document.querySelector("#postprocess-diarization").checked = true;
     document.querySelector("#postprocess-summary").checked = true;
     populatePostprocessNoteFormats();
+    configurePostprocessAvailability();
     document.querySelector('input[name="postprocess-speaker-mode"][value="auto"]').checked = true;
     document.querySelector("#postprocess-speaker-count").value = "2";
     document.querySelector("#postprocess-options").classList.remove("hidden");
@@ -1701,7 +1725,32 @@
       ? "Required for an imported file because there is no live transcript to keep."
       : "Reprocess the complete recording for the most accurate transcript.";
     syncPostprocessSpeakerControls();
+    syncPostprocessSummaryControls();
     if (!postprocessDialog.open) postprocessDialog.showModal();
+  }
+
+  function configurePostprocessAvailability() {
+    const diarizationRoot = engineCapabilities.diarization || {};
+    const diarizationEngine = preferences.diarization?.engine || diarizationRoot.primary_engine;
+    const diarization = diarizationRoot.engines?.[diarizationEngine] || diarizationRoot;
+    const diarizationReady = Boolean(diarizationEngine && diarization.available && diarization.installed);
+    const summaryRoot = engineCapabilities.summaries || {};
+    const summaryEngine = preferences.summary_engine?.engine || preferences.summary_engine?.provider
+      || summaryRoot.selected_engine;
+    const summary = summaryRoot.engines?.[summaryEngine] || summaryRoot;
+    const summaryReady = Boolean(summaryEngine && summary.available && summary.installed);
+
+    const diarizationInput = document.querySelector("#postprocess-diarization");
+    diarizationInput.disabled = !diarizationReady;
+    diarizationInput.checked = diarizationReady;
+    document.querySelector("#postprocess-diarization-option").classList.toggle("is-disabled", !diarizationReady);
+    document.querySelector("#postprocess-diarization-unavailable").classList.toggle("hidden", diarizationReady);
+
+    const summaryInput = document.querySelector("#postprocess-summary");
+    summaryInput.disabled = !summaryReady;
+    summaryInput.checked = summaryReady;
+    document.querySelector("#postprocess-summary-option").classList.toggle("is-disabled", !summaryReady);
+    document.querySelector("#postprocess-summary-unavailable").classList.toggle("hidden", summaryReady);
   }
 
   function setWorkflowStep(name, state, label) {
@@ -1763,6 +1812,9 @@
       : "The selected results have been saved locally.";
     document.querySelector("#postprocess-background").classList.add("hidden");
     document.querySelector("#postprocess-results").classList.remove("hidden");
+    const progressLauncher = document.querySelector("#postprocess-open");
+    progressLauncher.classList.remove("hidden");
+    progressLauncher.textContent = "Meeting ready · View results";
     document.querySelector("#postprocess-cancel-all").classList.add("hidden");
     await loadMeetingWorkspace();
   }
@@ -1809,6 +1861,9 @@
     );
     document.querySelector("#postprocess-progress").value = overall;
     document.querySelector("#postprocess-percent").textContent = `${overall}%`;
+    const progressLauncher = document.querySelector("#postprocess-open");
+    progressLauncher.classList.remove("hidden");
+    progressLauncher.textContent = `Processing · ${overall}%`;
 
     const summaryDone = !summaryExpected || Boolean(
       summaryJob && ["completed", "failed", "cancelled"].includes(summaryJob.status),
@@ -1824,7 +1879,9 @@
       job.payload?.postprocess && ["queued", "running", "paused"].includes(job.status));
     if (activeWorkflow) {
       postprocessMeetingId = meetingId;
-      workflowVisible = true;
+      workflowVisible = false;
+      workflowDismissed = true;
+      document.querySelector("#postprocess-open").classList.remove("hidden");
       if (!postprocessLogLines.length) resetPostprocessLog("Restored active processing session");
     }
     renderPostprocess(jobs);
@@ -1996,6 +2053,7 @@
     syncStartAction();
     document.querySelector("#live-actions").classList.remove("hidden");
     document.querySelector("#live-capture-strip").classList.remove("hidden");
+    page.classList.add("capture-active");
     updateLiveState(session);
     void refreshLiveAssistant(true);
     if (capturePollTimer) window.clearInterval(capturePollTimer);
@@ -2011,6 +2069,7 @@
     syncStartAction();
     document.querySelector("#live-actions").classList.add("hidden");
     document.querySelector("#live-capture-strip").classList.add("hidden");
+    page.classList.remove("capture-active");
   }
 
   function updateLiveState(session) {
@@ -2432,6 +2491,7 @@
         description: "Meet2Notes is processing the selected local steps.",
       });
       await loadMeetingWorkspace();
+      minimizePostprocessWorkflow();
       await refreshLiveAssistant(true);
     } catch (error) {
       if (postprocessDialog.open) postprocessDialog.close();
@@ -2442,6 +2502,13 @@
       stop.disabled = false;
       pause.disabled = false;
     }
+  }
+
+  function minimizePostprocessWorkflow() {
+    workflowDismissed = true;
+    workflowVisible = false;
+    if (postprocessDialog.open) postprocessDialog.close();
+    document.querySelector("#postprocess-open").classList.remove("hidden");
   }
 
   function renderProgress(job) {
@@ -2848,6 +2915,12 @@
     workflowVisible = false;
     postprocessDialog.close();
     toast("Processing continues safely in the background.");
+  });
+  document.querySelector("#postprocess-open").addEventListener("click", () => {
+    workflowDismissed = false;
+    workflowVisible = true;
+    if (workflowCompleted) document.querySelector("#postprocess-results").classList.remove("hidden");
+    if (!postprocessDialog.open) postprocessDialog.showModal();
   });
   document.querySelector("#postprocess-results").addEventListener("click", () => {
     workflowDismissed = true;

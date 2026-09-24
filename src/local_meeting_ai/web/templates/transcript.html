@@ -74,6 +74,7 @@
             <span>Stop</span>
           </button>
         </div>
+        <button type="button" class="button secondary hidden" id="postprocess-open" aria-label="Open final processing progress">Processing</button>
       </div>
     </header>
 
@@ -440,10 +441,11 @@
         <strong id="postprocess-options-title">Choose the final processing</strong>
         <small>These choices apply only to this meeting.</small>
       </div>
-      <div class="postprocess-option-card postprocess-speaker-option">
+      <div class="postprocess-option-card postprocess-speaker-option" id="postprocess-diarization-option">
         <input id="postprocess-diarization" type="checkbox" checked>
         <div>
           <label for="postprocess-diarization"><strong>Identify speakers</strong></label>
+          <p class="postprocess-option-guidance hidden" id="postprocess-diarization-unavailable"><span data-i18n="postprocess.diarization_unavailable">Speaker identification is unavailable. Install or load its engine in</span> <a href="/settings#speaker-engine" data-i18n="postprocess.settings_link">Settings</a>.</p>
           <div class="postprocess-speakers" id="postprocess-speakers">
             <span>Number of speakers</span>
             <div class="postprocess-speaker-choices">
@@ -464,6 +466,7 @@
           <label for="postprocess-summary" id="postprocess-summary-label"><strong>Create AI notes</strong><small>Generate structured notes with the selected format.</small></label>
           <label class="postprocess-format-field" for="postprocess-summary-template"><span>Note format</span><select id="postprocess-summary-template" aria-label="Note format"><option value="">Loading note formats…</option></select></label>
           <small class="postprocess-summary-sizing" id="postprocess-summary-sizing">Estimating transcript size…</small>
+          <p class="postprocess-option-guidance hidden" id="postprocess-summary-unavailable"><span data-i18n="postprocess.summary_unavailable">AI notes are unavailable. Configure and load a summary engine in</span> <a href="/settings#ai-engine" data-i18n="postprocess.settings_link">Settings</a>.</p>
         </div>
       </div>
       <div class="postprocess-actions postprocess-options-actions">
