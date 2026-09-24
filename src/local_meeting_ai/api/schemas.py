@@ -22,6 +22,8 @@ class MeetingUpdate(BaseModel):
     title: str | None = Field(default=None, min_length=1, max_length=200)
     description: str | None = Field(default=None, max_length=4000)
     language: str | None = Field(default=None, max_length=20)
+    client_name: str | None = Field(default=None, max_length=120)
+    project_name: str | None = Field(default=None, max_length=120)
 
 
 class MeetingResponse(BaseModel):
@@ -42,6 +44,8 @@ class MeetingResponse(BaseModel):
     recording_count: int
     audio_deleted_at: str | None
     audio_deleted_bytes: int | None
+    client_name: str = "A classificar"
+    project_name: str = "A classificar"
 
 
 class RecordingResponse(BaseModel):
@@ -366,7 +370,7 @@ class PreferenceUpdate(BaseModel):
 
 
 class PreferenceResponse(BaseModel):
-    ui_language: str = Field(default="en", pattern=r"^[a-z]{2,3}(?:-[A-Z]{2})?$")
+    ui_language: str = Field(default="pt-BR", pattern=r"^[a-z]{2,3}(?:-[A-Z]{2})?$")
     ui_theme: Literal["system", "light", "dark"] = "system"
     models_directory: str
     active_models_directory: str

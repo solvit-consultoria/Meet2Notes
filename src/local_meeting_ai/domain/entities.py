@@ -24,6 +24,8 @@ class Meeting:
     recording_count: int = 0
     audio_deleted_at: str | None = None
     audio_deleted_bytes: int | None = None
+    client_name: str = "A classificar"
+    project_name: str = "A classificar"
 
 
 @dataclass(frozen=True, slots=True)
@@ -247,6 +249,15 @@ class CaptureStatus:
 
 
 @dataclass(frozen=True, slots=True)
+class CapturedAudioTrack:
+    path: Path
+    source: AudioCaptureSource
+    duration_ms: int
+    sample_rate: int
+    channels: int = 1
+
+
+@dataclass(frozen=True, slots=True)
 class CapturedAudio:
     path: Path
     source: AudioCaptureSource
@@ -254,6 +265,7 @@ class CapturedAudio:
     sample_rate: int
     channels: int
     sources: tuple[AudioCaptureSource, ...] = ()
+    tracks: tuple[CapturedAudioTrack, ...] = ()
 
 
 @dataclass(frozen=True, slots=True)

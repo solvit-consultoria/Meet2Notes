@@ -171,12 +171,24 @@ def test_both_native_streams_pause_resume_and_final_wav(
         assert all(s.active for s in driver.streams)
         result = backend.stop()
         assert len(result.sources) == 2
+        assert {track.source.kind for track in result.tracks} == {"microphone", "system"}
         assert all(s.closed for s in driver.streams)
         if platform == "Windows":
             assert driver.manager.terminated
         with wave.open(str(path), "rb") as audio:
             assert audio.getframerate() == 48000 and audio.getnchannels() == 1
             assert audio.readframes(live.end_frame) == live.pcm_s16le
+        tracks = {track.source.kind: track for track in result.tracks}
+        for track in tracks.values():
+            with wave.open(str(track.path), "rb") as audio:
+                assert audio.getframerate() == 48000 and audio.getnchannels() == 1
+                assert audio.getnframes() == live.end_frame
+        with wave.open(str(tracks["microphone"].path), "rb") as audio:
+            microphone = np.frombuffer(audio.readframes(live.end_frame), dtype="<i2")
+        with wave.open(str(tracks["system"].path), "rb") as audio:
+            system = np.frombuffer(audio.readframes(live.end_frame), dtype="<i2")
+        assert np.all(microphone[:4700] == 12000)
+        assert np.all(system[:4700] == 8000)
         assert backend.status() is None
     finally:
         backend.shutdown()

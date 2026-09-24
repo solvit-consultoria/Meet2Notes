@@ -14,6 +14,7 @@ from local_meeting_ai.domain.entities import (
     AudioCaptureSource,
     AudioFrameBatch,
     CapturedAudio,
+    CapturedAudioTrack,
     CaptureStatus,
 )
 from local_meeting_ai.domain.errors import CapabilityUnavailableError, ValidationError
@@ -36,6 +37,8 @@ class CombinedCaptureBackend:
         self._streams: list[Any] = []
         self._manager: Any = None
         self._writer: wave.Wave_write | None = None
+        self._track_writers: dict[str, wave.Wave_write] = {}
+        self._track_paths: dict[str, Path] = {}
         self._mixer: Any = None
         self._sources: list[AudioCaptureSource] = []
         self._session_id: str | None = None
@@ -120,6 +123,20 @@ class CombinedCaptureBackend:
                 self._writer.setnchannels(1)
                 self._writer.setsampwidth(2)
                 self._writer.setframerate(48000)
+                self._track_paths = {
+                    source.id: destination.with_name(
+                        f"{destination.stem}-{source.kind}{destination.suffix}"
+                    )
+                    for source in sources
+                }
+                for source in sources:
+                    track_path = self._track_paths[source.id]
+                    track_path.parent.mkdir(parents=True, exist_ok=True)
+                    writer = wave.open(str(track_path), "wb")  # noqa: SIM115
+                    writer.setnchannels(1)
+                    writer.setsampwidth(2)
+                    writer.setframerate(48000)
+                    self._track_writers[source.id] = writer
                 self._open_streams()
                 self._epoch = time.monotonic()
                 self._state = "recording"
@@ -137,6 +154,13 @@ class CombinedCaptureBackend:
                 if self._writer is not None:
                     self._writer.close()
                 self._writer = None
+                for writer in self._track_writers.values():
+                    with suppress(Exception):
+                        writer.close()
+                self._track_writers.clear()
+                for track_path in self._track_paths.values():
+                    track_path.unlink(missing_ok=True)
+                self._track_paths.clear()
                 self._session_id = None
                 self._mixer = None
                 self._clear_queue()
@@ -235,9 +259,15 @@ class CombinedCaptureBackend:
                 self._error = warning
         target = max(0, round((elapsed - (0 if flush else 0.15)) * 48000))
         while self._mixer.frame < target:
-            pcm = self._mixer.read(min(4800, target - self._mixer.frame))
+            pcm, tracks = self._mixer.read_with_sources(
+                min(4800, target - self._mixer.frame)
+            )
             assert self._writer is not None
             self._writer.writeframesraw(pcm)
+            for source_id, track_pcm in tracks.items():
+                writer = self._track_writers.get(source_id)
+                if writer is not None:
+                    writer.writeframesraw(track_pcm)
             self._pending.extend(pcm)
         overflow = len(self._pending) - 48000 * 2 * 60
         if overflow > 0:
@@ -354,6 +384,9 @@ class CombinedCaptureBackend:
                 if self._writer is not None:
                     self._writer.close()
                 self._writer = None
+                for writer in self._track_writers.values():
+                    writer.close()
+                self._track_writers.clear()
                 self._session_id = None
                 self._state = "idle"
             assert self._destination is not None
@@ -364,6 +397,16 @@ class CombinedCaptureBackend:
                 duration_ms=round(self._mixer.frame / 48),
                 sample_rate=48000,
                 channels=1,
+                tracks=tuple(
+                    CapturedAudioTrack(
+                        path=self._track_paths[source.id],
+                        source=source,
+                        duration_ms=round(self._mixer.frame / 48),
+                        sample_rate=48000,
+                    )
+                    for source in self._sources
+                    if source.id in self._track_paths
+                ),
             )
 
     def shutdown(self) -> None:

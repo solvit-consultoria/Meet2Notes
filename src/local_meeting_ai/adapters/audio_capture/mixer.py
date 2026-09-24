@@ -84,20 +84,34 @@ class AudioMixer:
             track.blocks.popleft()
 
     def read(self, count: int) -> bytes:
+        return self.read_with_sources(count)[0]
+
+    def read_with_sources(self, count: int) -> tuple[bytes, dict[str, bytes]]:
+        """Render the mix and synchronized, mono PCM for each source."""
         mixed = np.zeros(count, dtype=np.float64)
+        rendered: dict[str, Any] = {}
         end = self.frame + count
-        for track in self.inputs.values():
+        for source_id, track in self.inputs.items():
+            source = np.zeros(count, dtype=np.float64)
             for start, samples in track.blocks:
                 left, right = max(self.frame, start), min(end, start + len(samples))
                 if right > left:
-                    mixed[left - self.frame : right - self.frame] += samples[
-                        left - start : right - start
-                    ]
+                    chunk = samples[left - start : right - start]
+                    source[left - self.frame : right - self.frame] += chunk
+            mixed += source
+            rendered[source_id] = source
             while track.blocks and track.blocks[0][0] + len(track.blocks[0][1]) <= end:
                 track.blocks.popleft()
         self.frame = end
         # Fixed headroom avoids clipping when both people speak at the same time.
-        return np.clip(np.rint(mixed / len(self.inputs)), -32768, 32767).astype("<i2").tobytes()
+        mixed_pcm = np.clip(
+            np.rint(mixed / len(self.inputs)), -32768, 32767
+        ).astype("<i2").tobytes()
+        source_pcm = {
+            source_id: np.clip(np.rint(samples), -32768, 32767).astype("<i2").tobytes()
+            for source_id, samples in rendered.items()
+        }
+        return mixed_pcm, source_pcm
 
     def levels(self, timestamp: float) -> dict[str, float]:
         return {

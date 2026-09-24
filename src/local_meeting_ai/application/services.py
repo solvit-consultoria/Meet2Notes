@@ -79,9 +79,14 @@ class MeetingService:
             if not title:
                 raise ValidationError("A meeting title is required")
             values["title"] = title
-        for optional in ("description", "language"):
+        for optional in ("description", "language", "client_name", "project_name"):
             if optional in values:
-                values[optional] = _clean_optional(values[optional])
+                clean = _clean_optional(values[optional])
+                values[optional] = (
+                    clean or "A classificar"
+                    if optional in {"client_name", "project_name"}
+                    else clean
+                )
         meeting = self.meetings.update(meeting_id, values)
         if not meeting:
             raise NotFoundError("Meeting not found")
@@ -265,6 +270,40 @@ class ImportService:
             size_bytes=path.stat().st_size,
             metadata=recording.metadata,
         )
+        for track in captured.tracks:
+            track_path = track.path.resolve()
+            if not track_path.is_relative_to(expected_root) or not track_path.is_file():
+                raise ValidationError("Captured audio track is outside private meeting storage")
+            track_role = f"master_{track.source.kind}"
+            track_metadata = {
+                "capture_source_id": track.source.id,
+                "capture_source_name": track.source.name,
+                "capture_source_kind": track.source.kind,
+                "capture_backend": track.source.backend,
+                "capture_host_api": track.source.host_api,
+                "is_loopback": track.source.is_loopback,
+                "synchronized_with_recording_id": recording.id,
+                "sample_rate": track.sample_rate,
+            }
+            track_checksum = await asyncio.to_thread(_sha256_path, track_path)
+            self.recordings.create(
+                meeting_id=meeting.id,
+                role=track_role,
+                local_path=str(track_path),
+                original_filename=f"live-capture-{track.source.kind}.wav",
+                media_type="audio/wav",
+                size_bytes=track_path.stat().st_size,
+                sha256=track_checksum,
+                metadata=track_metadata,
+            )
+            self.recordings.update_probe(
+                self.recordings.latest_for_role(meeting.id, track_role).id,  # type: ignore[union-attr]
+                duration_ms=track.duration_ms,
+                sample_rate=track.sample_rate,
+                channels=track.channels,
+                size_bytes=track_path.stat().st_size,
+                metadata=track_metadata,
+            )
         self.meetings.set_status(meeting.id, MeetingStatus.IMPORTING)
         job = self.jobs.create(
             meeting_id=meeting.id,

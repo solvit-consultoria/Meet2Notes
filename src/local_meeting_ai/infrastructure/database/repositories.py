@@ -65,6 +65,8 @@ def _meeting_from_row(row: Any) -> Meeting:
         audio_deleted_bytes=(
             row["audio_deleted_bytes"] if "audio_deleted_bytes" in keys else None
         ),
+        client_name=row["client_name"] if "client_name" in keys else "A classificar",
+        project_name=row["project_name"] if "project_name" in keys else "A classificar",
     )
 
 
@@ -299,6 +301,8 @@ class MeetingRepository:
             "ended_at",
             "audio_deleted_at",
             "audio_deleted_bytes",
+            "client_name",
+            "project_name",
         }
         changes = {key: value for key, value in values.items() if key in allowed}
         if not changes:
