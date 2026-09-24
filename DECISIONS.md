@@ -23,7 +23,7 @@ This file separates verified `v0.6.1` behavior from intended fork changes.
 
 - Product name: **Meeting by Solvit**. Keep the repository, Python package, data paths, and upstream attribution named Meet2Notes until a separate migration is justified.
 - Visual identity follows the Solvit site: wine `#63312d`, burnt orange `#c96022`, warm ivory `#faf5ef`, Spectral headings and Inter controls. Fonts are bundled for offline use under the OFL.
-- The Windows `install.ps1 -Mvp` profile installs capture and Faster Whisper without Torch or summary engines. Downloading a transcription model is a separate explicit step. The application still uses the existing local browser UI and launcher.
+- The Windows `install.ps1 -Mvp` profile installs capture, Faster Whisper, FFmpeg, FFprobe, and downloads/verifies the selected Faster Whisper model (`small` by default). `-SkipModels` and `-SkipFfmpeg` are explicit development/offline opt-outs and readiness remains incomplete.
 - On this workstation, the active database, meeting storage, and Whisper model were moved to Windows local app storage outside OneDrive because the checkout lives under OneDrive. Windows may display the app package's `LocalCache` path for these folders. The export destination remains unset until the user chooses its parent folder.
 - A Start Menu shortcut opens Chrome in app mode through `launch.ps1` and starts the local Python server when needed. This offers a taskbar window without packaging a native executable. Capture belongs to the server process, so closing the window does not intentionally stop an active session. Chrome app mode and the Start Menu shortcut do not provide automatic startup at Windows login or a tray icon.
 - The first-run banner asks for language and export destination; available microphone and system inputs are both preselected in the start dialog. Recording still requires a click. Google Meet detection and an extension are not implemented.
@@ -31,7 +31,7 @@ This file separates verified `v0.6.1` behavior from intended fork changes.
 - The local Faster Whisper adapter checks the CUDA math runtime on Windows before selecting a GPU automatically. On this workstation `cublas64_12.dll` was absent, so the application is configured for CPU, `small`, `int8`, and Portuguese. A missing CUDA runtime must not leave the live capture in a stopping state.
 - The app uses the existing Solvit site logo as its visible mark and favicon. The asset is copied into the fork for offline rendering; retain Solvit ownership and do not present it as an upstream Meet2Notes asset.
 - The optional Windows tray helper is PowerShell/Windows Forms, not a native installer. Its Startup shortcut launches the local server at sign-in without recording or opening a browser; double click opens the app window. The tray menu can request a graceful server shutdown, and the Startup shortcut can be removed separately.
-- The lean MVP installation must include both FFmpeg and FFprobe. A live test exposed that missing media tools let a direct Faster Whisper call succeed while the integrated import/transcription pipeline failed. Install through the existing WinGet path and honor the refreshed user PATH when launching from a long-lived desktop process.
+- The lean MVP installation requires both FFmpeg and FFprobe. The installer checks both after WinGet and discovers the app executables in WinGet Links/Packages even when a long-lived shell has a stale PATH.
 
 ## Validation required for new behavior
 

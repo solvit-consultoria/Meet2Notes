@@ -18,6 +18,8 @@ Este fork público parte da tag MIT [`v0.6.1`](https://github.com/estebanstifli/
 
 Clone a branch de trabalho e execute o inicializador incluído no repositório. O bootstrap do upstream foi desativado para impedir que ele clone ou atualize silenciosamente o repositório original.
 
+Pré-requisitos manuais: Windows 10/11, PowerShell, Python 3.11 ou mais recente (`py` ou `python`) e internet para baixar dependências/modelos. Se FFmpeg e FFprobe não estiverem instalados, o instalador usa WinGet; instale o WinGet ou esses dois executáveis antes se ele não estiver disponível. `install.ps1 -Mvp` automatiza as dependências Python de captura/transcrição, FFmpeg/FFprobe e o modelo `small` depois desses pré-requisitos. O script não gera um executável independente.
+
 ```powershell
 git clone --branch codex/mvp-local-meeting https://github.com/solvit-consultoria/Meet2Notes.git Meet2Notes
 Set-Location Meet2Notes
@@ -26,15 +28,27 @@ Set-ExecutionPolicy -Scope Process Bypass
 .\start.bat
 ```
 
-Depois, abra `http://127.0.0.1:8765`. O perfil `-Mvp` instala apenas a captura no Windows e o Faster Whisper para transcrição local. Ele não baixa modelos, PyTorch, diarização nem o gerador de resumos. Para instalar o modelo local `small`, execute `.\.venv\Scripts\python.exe -m local_meeting_ai.model_setup --models whisper --whisper-model small` e selecione-o em Configurações. Escolha pastas fora do OneDrive em **Configurações → Geral → Dados da reunião / Modelos de IA** para o banco, as gravações em andamento e os modelos. Defina a pasta do OneDrive apenas em **Arquivos das reuniões** para exportações finalizadas. O atualizador automático foi desativado neste fork. Faça atualizações só depois de revisar um release da Solvit.
+Depois, abra `http://127.0.0.1:8765`. O perfil `-Mvp` instala captura e Faster Whisper, baixa e verifica o modelo `small` e confirma que **FFmpeg e FFprobe** estão acessíveis. O primeiro download exige internet e cerca de 486 MB livres. Se o WinGet acabou de instalar o FFmpeg e esta sessão não vê as ferramentas, reinicie o PowerShell e execute o instalador novamente; ele procura os executáveis nos diretórios WinGet `Links` e `Packages`.
+
+O `small` é a opção inicial para começar. O instalador confirma os arquivos do modelo, mas não faz benchmark no PC. Modelos maiores usam mais memória e podem ser mais lentos em CPU; teste uma gravação curta antes de trocar em **Configurações → Transcrição**. O perfil `-Mvp` não instala PyTorch/CUDA, diarização nem runtime de resumo por IA por padrão.
+
+Para instalar também o motor Sherpa-ONNX e os modelos de diarização, execute `.\install.ps1 -Mvp -InstallDiarization`. O resumo local é opcional e depende de haver uma wheel compatível de `llama-cpp-python` para a versão de Python e Windows; o perfil MVP não anuncia notas de IA como prontas. Confira runtime e modelo em **Configurações → AI engine** antes de processar uma reunião. Pyannote Community exige aceite dos termos do modelo e token próprio; não faz parte desta instalação padrão.
+
+Para desenvolvimento ou uma instalação offline, use `-SkipModels` e/ou `-SkipFfmpeg`. O instalador mostrará que a configuração está **incompleta** enquanto faltar um requisito; importar e transcrever dependem de FFmpeg, FFprobe e um modelo local. Execute o verificador depois de completar a configuração:
+
+```powershell
+.\.venv\Scripts\python.exe scripts/check_environment.py --require-whisper-model small
+```
+
+Escolha pastas fora do OneDrive em **Configurações → Geral → Dados da reunião / Modelos de IA** para o banco, as gravações em andamento e os modelos. Defina a pasta de exportação em **Arquivos das reuniões** no primeiro uso; nenhuma pasta de exportação é presumida pelo aplicativo. O atualizador automático foi desativado neste fork. Faça atualizações só depois de revisar um release da Solvit.
 
 Para abrir como uma janela de aplicativo no Chrome, sem a barra de endereços, execute `.\launch.ps1`. Para criar o atalho no menu Iniciar, execute `.\install-shortcut.ps1` uma vez e procure **Meeting by Solvit** no Windows; você também pode fixar esse atalho na barra de tarefas. O servidor de gravação roda separadamente da janela. Fechar a janela não encerra o servidor nem uma captura em andamento; reabra pelo atalho para acompanhá-la. Esse atalho ainda depende da instalação Python nesta pasta e não é um instalador ou executável independente.
 
 Para manter um ícone na bandeja e iniciar o servidor ao entrar no Windows, execute `.\install-tray.ps1`. Um duplo clique no ícone abre a janela; o menu do ícone também oferece **Abrir** e **Desligar aplicativo e sair**. A inicialização não começa a gravar. Para desativar o início automático, execute `.\remove-tray-startup.ps1` e feche o ícone atual pelo menu. O ícone é mantido por um processo PowerShell oculto, e o servidor continua em seu processo Python separado.
 
-Na primeira abertura, confira idioma de transcrição e escolha a pasta de exportação. Ao iniciar uma reunião, microfone e áudio do sistema disponíveis vêm sugeridos juntos; confira os dispositivos antes de clicar em iniciar. A detecção automática de chamadas do Google Meet ainda não existe: a gravação começa somente após seu clique. Anotações manuais ficam salvas localmente na reunião e aparecem acima da transcrição no Markdown exportado. Se a GPU não tiver o runtime CUDA exigido pelo Faster Whisper, selecione CPU. O tempo de transcrição depende da duração da reunião e do modelo; a gravação salva pode ser processada depois.
+Na primeira abertura, escolha a pasta de exportação finalizada e confira idioma e modelo em Configurações. Preferências e dispositivos selecionados são salvos para os próximos usos. Ao iniciar uma reunião, microfone e áudio do sistema disponíveis vêm sugeridos juntos; confira os dispositivos antes de clicar em iniciar. A detecção automática de chamadas do Google Meet ainda não existe: a gravação começa somente após seu clique. Anotações manuais ficam salvas localmente na reunião e aparecem acima do transcript no Markdown exportado. Se a GPU não tiver o runtime CUDA exigido pelo Faster Whisper, selecione CPU. O tempo de transcrição depende da duração da reunião e do modelo; a gravação salva pode ser processada depois.
 
-O perfil `install.ps1 -Mvp` também instala FFmpeg via WinGet quando necessário. FFmpeg e FFprobe são necessários para importar, preparar e transcrever arquivos; uma instalação anterior do perfil MVP pode precisar de `winget install --id Gyan.FFmpeg --exact --source winget` e reinício do aplicativo. O inicializador lê o PATH atualizado do usuário quando foi aberto por um processo antigo do Windows.
+Para completar uma instalação anterior que não tinha modelo ou ferramentas de mídia, reexecute `.\install.ps1 -Mvp`. O instalador falha claramente se FFmpeg ou FFprobe não puderem ser localizados e não declara a transcrição pronta sem o modelo local selecionado.
 
 Consulte `AGENTS.md` e `DECISIONS.md` para os limites de privacidade e as decisões do fork. O restante deste README descreve capacidades herdadas do upstream `v0.6.1`; uma funcionalidade listada abaixo não significa que a Solvit a modificou, validou ou publicou.
 

@@ -1170,6 +1170,62 @@
         : `<span class="neutral-pill">${t("settings.optional_install")}</span>`;
   }
 
+  function renderFirstRunChecklist(mvpSettings, capabilities, profiles) {
+    const setState = (selector, ready, readyText, missingText) => {
+      const element = $(selector);
+      if (!element) return;
+      element.innerHTML = ready
+        ? `<span class="status-badge status-ready">${t(readyText)}</span>`
+        : `<span class="neutral-pill">${t(missingText)}</span>`;
+    };
+    const exportConfigured = Boolean(mvpSettings?.export_root?.trim());
+    setState(
+      "#first-run-export-state",
+      exportConfigured,
+      "settings.first_run_saved",
+      "settings.first_run_choose_export",
+    );
+    const small = (profiles || []).find(
+      (profile) => profile.engine === "faster-whisper" && profile.model === "small",
+    );
+    setState(
+      "#first-run-whisper-state",
+      Boolean(small?.installed && small?.runtime_available),
+      "settings.first_run_installed",
+      small?.runtime_available === false ? "settings.first_run_runtime_missing" : "settings.first_run_install_model",
+    );
+    setState(
+      "#first-run-media-state",
+      Boolean(capabilities.ffmpeg?.available),
+      "settings.first_run_ready",
+      "settings.first_run_install_media",
+    );
+    const diarization = capabilities.diarization?.engines?.["sherpa-onnx"]
+      || capabilities.diarization || {};
+    setState(
+      "#first-run-diarization-state",
+      Boolean(diarization.available && diarization.installed),
+      "settings.first_run_ready",
+      diarization.available ? "settings.first_run_install_speaker_models" : "settings.first_run_optional_runtime_missing",
+    );
+    const summaries = capabilities.summaries || {};
+    const summaryProvider = summaryPreferences?.summary_engine?.provider || "local";
+    if (summaryProvider !== "local" && summaryProvider !== "disabled") {
+      setState("#first-run-summary-state", true, "settings.first_run_remote_selected", "settings.first_run_remote_selected");
+      return;
+    }
+    if (summaryProvider === "disabled") {
+      setState("#first-run-summary-state", true, "settings.first_run_disabled", "settings.first_run_disabled");
+      return;
+    }
+    setState(
+      "#first-run-summary-state",
+      Boolean(summaries.available && summaries.installed),
+      "settings.first_run_ready",
+      summaries.available ? "settings.first_run_install_summary_model" : "settings.first_run_optional_runtime_missing",
+    );
+  }
+
   function renderPlugins(catalog) {
     pluginCatalog = catalog.plugins || [];
     const apiSummary = $("#plugin-api-summary");
@@ -1535,7 +1591,7 @@
 
   async function loadSettings() {
     try {
-      const [preferences, info, capabilities, models, credential, formats, plugins, embeddings, webhooks, liveAssistant, mcp] = await Promise.all([
+      const [preferences, info, capabilities, models, credential, formats, plugins, embeddings, webhooks, liveAssistant, mcp, mvpSettings] = await Promise.all([
         api("/api/settings"),
         api("/api/info"),
         api("/api/capabilities"),
@@ -1547,6 +1603,7 @@
         api("/api/webhooks"),
         api("/api/live-assistant"),
         api("/api/mcp/configuration"),
+        api("/api/mvp/settings"),
       ]);
       $("#ui-language").value = preferences.ui_language;
       $("#ui-theme").value = preferences.ui_theme || "system";
@@ -1572,6 +1629,7 @@
       defaultModelsDirectory = info.default_models_directory || "";
       const profiles = await api("/api/models/transcription");
       renderTranscriptionCatalog(profiles, preferences);
+      renderFirstRunChecklist(mvpSettings, capabilities, profiles);
       refreshRagStatus();
     } catch (error) {
       toast(error.message, "error");

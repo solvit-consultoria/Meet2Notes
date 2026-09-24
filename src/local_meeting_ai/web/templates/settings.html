@@ -31,6 +31,17 @@
           </span>
           <div><h2>General</h2><p>Small choices for your local interface.</p></div>
         </div>
+        <section class="general-card" aria-labelledby="first-run-title">
+          <div class="general-card-heading"><span class="settings-icon engine-blue"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m5 12 4 4L19 6"/><circle cx="12" cy="12" r="9"/></svg></span><div><strong id="first-run-title" data-i18n="settings.first_run_title">Primeira configuração · checklist</strong><small data-i18n="settings.first_run_description">Defina a pasta de exportação e confira as ferramentas locais antes da primeira reunião.</small></div></div>
+          <dl class="system-list">
+            <div><dt data-i18n="settings.first_run_export">Pasta de exportação</dt><dd id="first-run-export-state"><span class="neutral-pill">Checking…</span></dd></div>
+            <div><dt data-i18n="settings.first_run_whisper">Faster Whisper small</dt><dd id="first-run-whisper-state"><span class="neutral-pill">Checking…</span></dd></div>
+            <div><dt data-i18n="settings.first_run_media">FFmpeg + FFprobe</dt><dd id="first-run-media-state"><span class="neutral-pill">Checking…</span></dd></div>
+            <div><dt data-i18n="settings.first_run_speakers">Identificação de falantes</dt><dd id="first-run-diarization-state"><span class="neutral-pill">Checking…</span></dd></div>
+            <div><dt data-i18n="settings.first_run_notes">Notas locais com IA</dt><dd id="first-run-summary-state"><span class="neutral-pill">Checking…</span></dd></div>
+          </dl>
+          <p class="muted-copy" data-i18n="settings.first_run_help">A instalação MVP inclui transcrição local. Diarização e notas com IA são opcionais e só ficam prontas quando o runtime e o modelo estão instalados.</p>
+        </section>
         <form id="settings-form" class="settings-form">
           <label class="setting-row">
             <span><strong>Interface language</strong><small>The interface is prepared for incremental translation.</small></span>
