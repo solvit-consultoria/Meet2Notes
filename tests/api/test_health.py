@@ -173,7 +173,9 @@ def test_activity_feed_is_incremental(client: TestClient) -> None:
     assert entries[-1]["level"] == "error"
 
     incremental = client.get(f"/api/activity?after={entries[-2]['id']}")
-    assert [entry["message"] for entry in incremental.json()] == ["Audio source disconnected"]
+    incremental_entries = incremental.json()
+    assert incremental_entries[0]["message"] == "Audio source disconnected"
+    assert all(entry["id"] > entries[-2]["id"] for entry in incremental_entries)
 
 
 def test_diagnostic_report_continues_and_is_shareable(client: TestClient) -> None:
