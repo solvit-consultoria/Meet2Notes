@@ -812,6 +812,23 @@ def sidebar_system_status(container: ContainerDependency) -> dict[str, Any]:
     }
 
 
+@router.get("/system/performance")
+def system_performance() -> dict[str, Any]:
+    """Return lightweight, read-only process and system memory metrics.
+
+    Keep this endpoint independent from engine capability checks and GPU probes
+    so an optional UI panel can poll it without disturbing active capture.
+    """
+    return {
+        **_sidebar_memory_status(),
+        "logical_cpu_count": os.cpu_count(),
+        # CPU utilization requires sampling over an interval. Avoid blocking the
+        # request (and the capture UI) for a measurement that may be misleading.
+        "cpu_usage_percent": None,
+        "cpu_usage_available": False,
+    }
+
+
 def _sidebar_engine_entry(
     role: str,
     engine_id: str,
