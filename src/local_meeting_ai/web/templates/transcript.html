@@ -107,7 +107,7 @@
 
     <div class="meeting-tab-panel active" id="meeting-tab-transcript" role="tabpanel" data-meeting-panel="transcript">
     <div class="live-capture-strip hidden" id="live-capture-strip">
-      <span class="live-indicator"><i></i> Live</span>
+      <span class="live-indicator"><i></i> <span id="live-capture-badge">Recording</span></span>
       <div class="live-source-copy">
         <strong id="live-source-name">Audio source</strong>
         <span id="live-capture-state">Listening locally</span>
@@ -397,6 +397,16 @@
       </label>
     </div>
     <div class="source-selection-summary" id="source-selection-summary" role="status" aria-live="polite"></div>
+
+    <section class="live-transcription-choice" id="live-transcription-choice">
+      <label class="live-transcription-toggle" for="realtime-transcription">
+        <input id="realtime-transcription" type="checkbox">
+        <span><strong data-i18n="capture.realtime_label">Transcribe during the meeting</strong>
+          <small data-i18n="capture.realtime_hint">Off by default to reduce memory use. Audio is still recorded, and the final transcript is created after you stop the meeting.</small></span>
+      </label>
+      <p class="live-transcription-restart hidden" id="live-transcription-restart" data-i18n="capture.realtime_restart">Restart Meet2Notes to enable this option.</p>
+      <p data-i18n="capture.recording_notice">The selected audio will be recorded locally. You can watch audio levels during the call. Models configured to stay loaded may still use memory.</p>
+    </section>
 
     <section class="source-picker-panel" id="native-source-panel">
       <div class="source-picker-heading">

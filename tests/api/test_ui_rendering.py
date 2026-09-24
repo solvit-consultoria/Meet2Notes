@@ -96,7 +96,9 @@ def test_audio_source_check_uses_a_short_cancellable_probe_without_recording(cli
     assert response.status_code == 200
 
     root = Path(__file__).parents[2]
-    script = (root / "src/local_meeting_ai/web/static/js/transcript.js").read_text(encoding="utf-8")
+    script = (root / "src/local_meeting_ai/web/static/js/transcript.js").read_text(
+        encoding="utf-8"
+    )
     styles = (root / "src/local_meeting_ai/web/static/css/transcription.css").read_text(
         encoding="utf-8"
     )
@@ -119,6 +121,34 @@ def test_audio_source_check_uses_a_short_cancellable_probe_without_recording(cli
         assert locale["capture.test_no_signal"]
         assert locale["capture.test_low"]
         assert locale["capture.test_clear"]
+
+
+def test_live_transcription_is_optional_and_final_pass_follows_stop(client) -> None:
+    response = client.get("/?new=1")
+    assert response.status_code == 200
+    assert 'id="realtime-transcription" type="checkbox"' in response.text
+    assert 'id="live-transcription-choice"' in response.text
+
+    root = Path(__file__).parents[2]
+    script = (root / "src/local_meeting_ai/web/static/js/transcript.js").read_text(encoding="utf-8")
+    assert 'meet2notes.live-transcription.v1' in script
+    assert 'setItem(liveTranscriptionPreferenceKey, String(liveTranscriptionEnabled))' in script
+    assert (
+        'realtime_transcription: document.querySelector("#realtime-transcription").checked'
+        in script
+    )
+    assert 'liveTranscriptionEnabled\n        ? `' in script
+    assert 't("capture.recording_live_off")' in script
+    assert 'finalPass.disabled = isImport || (!isImport && !liveTranscriptionEnabled)' in script
+
+    locale_dir = root / "src/local_meeting_ai/web/static/locales"
+    for locale_name in ("en.json", "pt-BR.json", "es.json"):
+        locale = json.loads((locale_dir / locale_name).read_text(encoding="utf-8"))
+        assert locale["capture.realtime_label"]
+        assert locale["capture.realtime_hint"]
+        assert locale["capture.recording_notice"]
+        assert locale["capture.recording_live_off"]
+        assert locale["capture.final_required_after_stop"]
 
 
 def test_optional_performance_panel_only_polls_while_visible(client) -> None:

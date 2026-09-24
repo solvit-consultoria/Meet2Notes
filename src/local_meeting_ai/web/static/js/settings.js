@@ -533,7 +533,8 @@
     $("#fw-word-timestamps").checked = config.word_timestamps ?? true;
     $("#fw-condition-previous").checked =
       config.condition_on_previous_text ?? true;
-    $("#fw-preload-on-start").checked = config.preload_on_start ?? true;
+    $("#fw-preload-on-start").checked = config.preload_on_start ?? false;
+    $("#fw-keep-model-loaded").checked = config.keep_model_loaded ?? false;
     $("#fw-chunk-seconds").value = config.realtime_chunk_seconds ?? 3;
     $("#fw-overlap-seconds").value = config.realtime_overlap_seconds ?? 1;
     currentComputeType = config.compute_type || "auto";
@@ -1818,7 +1819,7 @@
             condition_on_previous_text: $("#fw-condition-previous").checked,
             cpu_threads: Number($("#fw-cpu-threads").value),
             num_workers: Number($("#fw-num-workers").value),
-            keep_model_loaded: true,
+            keep_model_loaded: $("#fw-keep-model-loaded").checked,
             preload_on_start: $("#fw-preload-on-start").checked,
             realtime_chunk_seconds: chunkSeconds,
             realtime_overlap_seconds: overlapSeconds,

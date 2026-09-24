@@ -6,9 +6,11 @@ Each input has its own level meter. Adding an input keeps the device selected in
 the other group. You can also record either input on its own. **Media file**
 switches to importing an existing recording.
 
-Microphone + system produces one local mono WAV at 48 kHz and sends that same
-mix to live transcription. Both inputs have equal gain with headroom for people
-speaking simultaneously. Pause and resume control both devices. A silent system
+Microphone + system preserves synchronized microphone and system masters and
+derives a 48 kHz mono mix for transcription. Live transcription is off by
+default: the app records both inputs and shows their levels, then queues final
+transcription after Stop. You can opt in to a provisional live transcript when
+starting a meeting. Pause and resume control both devices. A silent system
 output does not stop microphone recording. The recording metadata retains both
 device names and their original audio formats.
 

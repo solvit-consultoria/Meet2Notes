@@ -107,11 +107,12 @@ Whisper, Sherpa-ONNX, or a particular language model.
 
 ## Meet2Notes 0.6: the complete meeting, available to your AI
 
-Version 0.6.1 can record **Microphone + System audio** simultaneously, capturing
+This fork can record **Microphone + System audio** simultaneously, capturing
 your voice and the other participants in one synchronized local recording. Each
-input has its own device selector and live meter; the mixed audio feeds both live
-transcription and the final WAV while preserving headroom when people speak at
-the same time. Windows uses native WASAPI loopback, while the setup guide explains
+input has its own device selector and live meter; the mixed audio feeds the final
+transcription after recording while preserving headroom when people speak at the
+same time. Live transcription can be enabled per meeting. Windows uses native
+WASAPI loopback, while the setup guide explains
 the virtual or monitor inputs used on macOS and Linux.
 
 The 0.6 series also turns Meet2Notes into a private knowledge source for the desktop
@@ -665,12 +666,22 @@ start. They can also be overridden with `M2N_DATA_DIR`, `M2N_MODELS_DIR`,
 
 ## Recording and post-processing
 
+Live transcription is off by default. The selected microphone and system inputs
+are recorded while their levels and elapsed time remain visible; the final
+transcription starts after Stop. Enable **Transcribe during the meeting** when
+you need a provisional live transcript. The choice is remembered on this
+browser. In Settings, **Load transcription models when the app opens** and
+**Keep the model in memory after transcription** control whether Faster Whisper
+uses RAM outside a transcription job. Both are off on a new installation;
+existing saved preferences stay in effect until changed.
+
 After stopping a recording or importing a media file, Meet2Notes presents the
 processing choices before starting expensive work:
 
 1. Run or skip speaker diarization.
 2. Detect the number of speakers automatically or provide the known count.
-3. Run or skip the selected final transcription pass.
+3. Run the selected final transcription pass (required when live transcription
+   was off; optional when a live transcript exists).
 4. Run or skip AI analysis using the selected note format.
 
 The processing dialog includes a live text log as well as progress. Each job

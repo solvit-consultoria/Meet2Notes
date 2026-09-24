@@ -81,6 +81,10 @@
   let sourceProbePending = null;
   const selectedDevices = { microphone: null, system: null };
   const capturePreferencesKey = "meet2notes.capture-preferences.v1";
+  const liveTranscriptionPreferenceKey = "meet2notes.live-transcription.v1";
+  let liveTranscriptionEnabled = false;
+  try { liveTranscriptionEnabled = window.localStorage.getItem(liveTranscriptionPreferenceKey) === "true"; }
+  catch { /* Storage may be unavailable in private contexts. */ }
   let latestActivityId = 0;
   let performancePollTimer = null;
   let performancePollBusy = false;
@@ -614,6 +618,15 @@
     const filePanel = document.querySelector("#file-source-panel");
     nativePanel.classList.toggle("hidden", mode === "file");
     filePanel.classList.toggle("hidden", mode !== "file");
+    document.querySelector("#live-transcription-choice").classList.toggle("hidden", mode === "file");
+    const realtimeToggle = document.querySelector("#realtime-transcription");
+    const realtimeSupported = captureCapability.realtime_transcription === true;
+    realtimeToggle.disabled = !realtimeSupported;
+    document.querySelector("#live-transcription-restart").classList.toggle("hidden", realtimeSupported);
+    if (!realtimeSupported) {
+      realtimeToggle.checked = false;
+      liveTranscriptionEnabled = true;
+    }
     const submitCopy = document.querySelector("#transcription-submit span");
     submitCopy.textContent = mode === "file"
       ? "Import and transcribe"
@@ -1924,13 +1937,17 @@
     document.querySelector("#postprocess-title").textContent = "Choose final processing";
     document.querySelector("#postprocess-description").textContent = isImport
       ? "Choose what to do after the complete file transcription."
-      : "Choose how to finish this live transcription.";
+      : liveTranscriptionEnabled
+        ? "Choose how to finish this live transcription."
+        : t("capture.final_after_stop");
     finalPass.checked = true;
-    finalPass.disabled = isImport;
-    document.querySelector("#postprocess-final-pass-option").classList.toggle("is-disabled", isImport);
+    finalPass.disabled = isImport || (!isImport && !liveTranscriptionEnabled);
+    document.querySelector("#postprocess-final-pass-option").classList.toggle("is-disabled", finalPass.disabled);
     document.querySelector("#postprocess-final-pass-help").textContent = isImport
       ? "Required for an imported file because there is no live transcript to keep."
-      : "Reprocess the complete recording for the most accurate transcript.";
+      : !liveTranscriptionEnabled
+        ? t("capture.final_required_after_stop")
+        : "Reprocess the complete recording for the most accurate transcript.";
     syncPostprocessSpeakerControls();
     syncPostprocessSummaryControls();
     if (!postprocessDialog.open) postprocessDialog.showModal();
@@ -2099,11 +2116,18 @@
       ? "Listening to the selected source"
       : "No transcript yet";
     segmentContainer.innerHTML = captureSession
-      ? `
+      ? liveTranscriptionEnabled
+        ? `
         <div class="minimal-empty-state live-listening">
           <span class="pulse-orbit"><i></i></span>
-          <h2>Listening and transcribing locally…</h2>
-          <p>The first words will appear here in real time. Pause or stop whenever you need.</p>
+          <h2>${escapeHTML(t("capture.live_listening_title"))}</h2>
+          <p>${escapeHTML(t("capture.live_listening_hint"))}</p>
+        </div>`
+        : `
+        <div class="minimal-empty-state live-listening recording-only">
+          <span class="pulse-orbit"><i></i></span>
+          <h2>${escapeHTML(t("capture.recording_title"))}</h2>
+          <p>${escapeHTML(t("capture.recording_live_off"))}</p>
         </div>`
       : `
         <div class="minimal-empty-state">
@@ -2127,6 +2151,11 @@
   function openStartDialog() {
     sourcePreviewSuppressed = false;
     document.querySelector("#transcription-form").reset();
+    const realtimeToggle = document.querySelector("#realtime-transcription");
+    try {
+      liveTranscriptionEnabled = window.localStorage.getItem(liveTranscriptionPreferenceKey) === "true";
+    } catch { liveTranscriptionEnabled = false; }
+    realtimeToggle.checked = liveTranscriptionEnabled;
     document.querySelector('input[name="source-mode"][value="microphone"]').checked = true;
     // A meeting needs both sides of the call. The device picker below still
     // lets the user change either default before capture starts.
@@ -2185,14 +2214,24 @@
   async function startNativeCapture() {
     const selected = selectedNativeSources();
     if (!selected.length) throw new Error("Choose an available audio source.");
+    const realtimeSupported = captureCapability.realtime_transcription === true;
+    liveTranscriptionEnabled = realtimeSupported
+      ? document.querySelector("#realtime-transcription").checked
+      : true;
     const session = await api("/api/capture/sessions", {
       method: "POST",
       body: JSON.stringify({
         source_ids: selected.map((input) => input.value),
+        ...(realtimeSupported
+          ? { realtime_transcription: document.querySelector("#realtime-transcription").checked }
+          : {}),
         ...transcriptionOptions(),
       }),
     });
     captureSession = session;
+    if (typeof session.realtime_transcription === "boolean") {
+      liveTranscriptionEnabled = session.realtime_transcription;
+    }
     meetingId = String(session.meeting_id);
     currentMeeting = { description: "" };
     renderManualNotes();
@@ -2263,6 +2302,9 @@
 
   function setLiveState(session) {
     captureSession = session;
+    if (typeof session.realtime_transcription === "boolean") {
+      liveTranscriptionEnabled = session.realtime_transcription;
+    }
     startActionAvailable = false;
     syncStartAction();
     document.querySelector("#live-actions").classList.remove("hidden");
@@ -2290,11 +2332,19 @@
     const paused = session.state === "paused";
     const strip = document.querySelector("#live-capture-strip");
     strip.classList.toggle("paused", paused);
-    strip.classList.toggle("transcription-error", Boolean(session.capture_error) || session.realtime_status === "error");
+    const realtimeEnabled = typeof session.realtime_transcription === "boolean"
+      ? session.realtime_transcription
+      : liveTranscriptionEnabled;
+    liveTranscriptionEnabled = realtimeEnabled;
+    strip.classList.toggle("recording-only", !realtimeEnabled);
+    strip.classList.toggle("transcription-error", Boolean(session.capture_error) || (realtimeEnabled && session.realtime_status === "error"));
     const sources = session.sources?.length ? session.sources : [session.source];
     document.querySelector("#live-source-name").textContent = sources.map(displaySourceName).join(" + ");
-    document.querySelector("#live-capture-state").textContent =
-      session.capture_error || (paused ? "Capture paused" : session.realtime_message || "Transcribing locally");
+    document.querySelector("#live-capture-badge").textContent = t(realtimeEnabled ? "capture.live_badge" : "capture.recording_badge");
+    document.querySelector("#live-capture-state").textContent = session.capture_error
+      || (paused ? t("capture.paused") : realtimeEnabled
+        ? (session.realtime_message || t("capture.transcribing"))
+        : t("capture.recording_only"));
     document.querySelector("#capture-elapsed").textContent = formatTimestamp(session.elapsed_ms);
     document.querySelector("#capture-level").style.width = `${Math.round((session.level || 0) * 100)}%`;
     const inputLevels = document.querySelector("#live-input-levels");
@@ -2307,8 +2357,9 @@
           <meter min="0" max="1" value="${level}" aria-label="${escapeHTML(label)}"></meter></span>`;
       }).join("");
     }
-    document.querySelector("#pause-capture-label").textContent =
-      paused ? "Resume transcription" : "Pause transcription";
+    document.querySelector("#pause-capture-label").textContent = paused
+      ? t(realtimeEnabled ? "capture.resume_transcription" : "capture.resume_recording")
+      : t(realtimeEnabled ? "capture.pause_transcription" : "capture.pause_recording");
     document.querySelector(".pause-symbol").classList.toggle("hidden", paused);
     document.querySelector(".resume-symbol").classList.toggle("hidden", !paused);
   }
@@ -2997,6 +3048,11 @@
   });
   document.querySelector("#transcription-form").addEventListener("submit", () => cancelSourceTest({ reset: true, resumePreview: false }));
   document.querySelector("#transcription-form").addEventListener("submit", submitTranscription);
+  document.querySelector("#realtime-transcription").addEventListener("change", (event) => {
+    liveTranscriptionEnabled = event.currentTarget.checked;
+    try { window.localStorage.setItem(liveTranscriptionPreferenceKey, String(liveTranscriptionEnabled)); }
+    catch { /* The setting still applies for this page session. */ }
+  });
   document.querySelector("#capture-file").addEventListener("change", (event) => {
     const file = event.target.files[0];
     if (!file) return resetFilePicker();

@@ -1330,6 +1330,33 @@
   transition: border-color .15s ease, background .15s ease;
 }
 
+.live-transcription-choice {
+  padding: 11px 13px;
+  border: 1px solid #dfe5ee;
+  border-radius: 9px;
+  background: #fafbfc;
+}
+
+.live-transcription-toggle {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  cursor: pointer;
+}
+
+.live-transcription-toggle input { margin: 3px 0 0; accent-color: #175cd3; }
+.live-transcription-toggle strong,
+.live-transcription-toggle small { display: block; }
+.live-transcription-toggle strong { color: #344054; font-size: 13px; line-height: 1.35; }
+.live-transcription-toggle small,
+.live-transcription-choice > p { color: #667085; font-size: 12px; line-height: 1.5; }
+.live-transcription-toggle small { margin-top: 3px; }
+.live-transcription-choice > p { margin: 8px 0 0 24px; }
+.minimal-transcript-page.capture-active.recording-only #live-ai-assistant { display: none !important; }
+.live-capture-strip.recording-only { background: #f0f9ff; border-bottom-color: #b9e6fe; }
+.live-capture-strip.recording-only .live-indicator { color: #175cd3; background: #e0f2fe; }
+.live-capture-strip.recording-only .live-indicator i { background: #1570ef; }
+
 .native-source-option:hover,
 .native-source-option:has(input:checked) {
   background: #f4f7ff;

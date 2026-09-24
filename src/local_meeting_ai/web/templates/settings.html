@@ -213,7 +213,8 @@
             <div class="engine-field-grid">
               <label class="engine-field wide"><span>Transcription language</span><select id="fw-language"><option value="">Auto detect · recommended</option></select><small>Auto detection works well for multilingual meetings.</small></label>
               <label class="engine-field" id="faster-whisper-device-option"><span>GPU use</span><select id="fw-device"><option value="auto">Auto · recommended</option><option value="cpu">CPU</option><option value="cuda">CUDA · NVIDIA GPU</option></select><small id="engine-device-note">Detecting available acceleration…</small></label>
-              <label class="engine-toggle"><span><strong>Load transcription models at application start</strong><small>Preloads the selected Live and Final transcription models so they are ready when you need them.</small></span><span class="switch"><input id="fw-preload-on-start" type="checkbox"><i></i></span></label>
+              <label class="engine-toggle"><span><strong data-i18n="settings.fw_preload_on_start">Load transcription models when the app opens</strong><small data-i18n="settings.fw_preload_on_start_help">Preload the selected Live and Final models at startup. This can increase startup time and memory use.</small></span><span class="switch"><input id="fw-preload-on-start" type="checkbox"><i></i></span></label>
+              <label class="engine-toggle"><span><strong data-i18n="settings.fw_keep_model_loaded">Keep the model in memory after transcription</strong><small data-i18n="settings.fw_keep_model_loaded_help">Keep the model loaded between transcriptions to reduce waiting. Turn this off to release memory after each job.</small></span><span class="switch"><input id="fw-keep-model-loaded" type="checkbox"><i></i></span></label>
             </div>
           </div>
 
