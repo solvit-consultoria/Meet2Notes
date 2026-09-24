@@ -20,6 +20,19 @@ def test_performance_endpoint_returns_only_compact_read_only_metrics(
             "process_bytes": 1_200,
         },
     )
+    monkeypatch.setattr(
+        routes,
+        "system_performance_snapshot",
+        lambda: {
+            "cpu_usage_percent": 37.5,
+            "cpu_usage_available": True,
+            "gpu_available": True,
+            "gpu_metrics_available": True,
+            "gpu_usage_percent": 62.0,
+            "gpu_memory_used_bytes": 512,
+            "gpu_memory_total_bytes": 1024,
+        },
+    )
 
     response = client.get("/api/system/performance")
 
@@ -32,8 +45,13 @@ def test_performance_endpoint_returns_only_compact_read_only_metrics(
         "percent": 56.25,
         "process_bytes": 1_200,
         "logical_cpu_count": routes.os.cpu_count(),
-        "cpu_usage_percent": None,
-        "cpu_usage_available": False,
+        "cpu_usage_percent": 37.5,
+        "cpu_usage_available": True,
+        "gpu_available": True,
+        "gpu_metrics_available": True,
+        "gpu_usage_percent": 62.0,
+        "gpu_memory_used_bytes": 512,
+        "gpu_memory_total_bytes": 1024,
     }
     assert not any("path" in key.lower() for key in payload)
 
@@ -51,6 +69,19 @@ def test_performance_endpoint_handles_unavailable_memory_metrics(
             "used_bytes": None,
             "percent": None,
             "process_bytes": None,
+        },
+    )
+    monkeypatch.setattr(
+        routes,
+        "system_performance_snapshot",
+        lambda: {
+            "cpu_usage_percent": None,
+            "cpu_usage_available": False,
+            "gpu_available": False,
+            "gpu_metrics_available": False,
+            "gpu_usage_percent": None,
+            "gpu_memory_used_bytes": None,
+            "gpu_memory_total_bytes": None,
         },
     )
 
