@@ -1017,8 +1017,19 @@ class TranscriptionRepository:
         *,
         is_final: bool = False,
     ) -> None:
+        self.append_segments(transcription_id, [segment], is_final=is_final)
+
+    def append_segments(
+        self,
+        transcription_id: int,
+        segments: Sequence[SegmentDraft],
+        *,
+        is_final: bool = False,
+    ) -> None:
+        if not segments:
+            return
         with self.database.transaction() as connection:
-            connection.execute(
+            connection.executemany(
                 """
                 INSERT INTO transcript_segments(
                     transcription_id, segment_index, start_ms, end_ms, text,
@@ -1032,16 +1043,19 @@ class TranscriptionRepository:
                     is_final = excluded.is_final,
                     metadata_json = excluded.metadata_json
                 """,
-                (
-                    transcription_id,
-                    segment.index,
-                    segment.start_ms,
-                    segment.end_ms,
-                    segment.text,
-                    segment.confidence,
-                    int(is_final),
-                    json.dumps(segment.metadata or {}),
-                ),
+                [
+                    (
+                        transcription_id,
+                        segment.index,
+                        segment.start_ms,
+                        segment.end_ms,
+                        segment.text,
+                        segment.confidence,
+                        int(is_final),
+                        json.dumps(segment.metadata or {}),
+                    )
+                    for segment in segments
+                ],
             )
 
     def complete(

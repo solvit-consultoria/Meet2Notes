@@ -5,6 +5,7 @@ import hashlib
 import logging
 from collections.abc import Sequence
 from pathlib import Path
+from time import monotonic
 from typing import Any
 
 from local_meeting_ai.application.transcription_config import faster_whisper_config
@@ -39,6 +40,10 @@ from local_meeting_ai.infrastructure.jobs import JobContext, LocalJobQueue
 from local_meeting_ai.infrastructure.storage import MeetingStorage
 
 logger = logging.getLogger(__name__)
+
+_PROGRESS_UPDATE_INTERVAL_SECONDS = 1.0
+_SEGMENT_BATCH_INTERVAL_SECONDS = 2.0
+_SEGMENT_BATCH_SIZE = 16
 
 
 class TranscriptionService:
@@ -384,45 +389,73 @@ class TranscriptionService:
             await context.raise_if_cancelled()
             await context.update(0.24, "Starting local transcription")
 
-            def report_progress(progress: float, message: str) -> None:
-                self.jobs.update_progress(
-                    job.uuid,
-                    0.24 + max(0.0, min(progress, 1.0)) * 0.70,
-                    message,
-                )
+            last_progress_update = monotonic() - _PROGRESS_UPDATE_INTERVAL_SECONDS
+            last_segment_flush = monotonic()
+            pending_segments: list[Any] = []
 
-            def report_segment(segment: Any) -> None:
-                self.transcriptions.append_segment(
+            def flush_segments() -> None:
+                nonlocal last_segment_flush
+                if not pending_segments:
+                    return
+                self.transcriptions.append_segments(
                     transcription_id,
-                    segment,
+                    pending_segments,
                     is_final=False,
                 )
+                pending_segments.clear()
+                last_segment_flush = monotonic()
 
-            result = await self.engine.transcribe(
-                TranscriptionEngineRequest(
-                    audio_path=Path(normalized.local_path),
-                    model=profile.model,
-                    device=profile.device,
-                    compute_type=profile.compute_type,
-                    language=job.payload.get("language"),
-                    task=str(job.payload.get("task", "transcribe")),
-                    beam_size=profile.beam_size,
-                    vad_filter=profile.vad_filter,
-                    allow_model_download=bool(job.payload.get("allow_model_download", False)),
-                    engine=profile.engine,
-                    device_index=profile.device_index,
-                    cpu_threads=profile.cpu_threads,
-                    num_workers=profile.num_workers,
-                    vad_min_silence_ms=profile.vad_min_silence_ms,
-                    word_timestamps=profile.word_timestamps,
-                    condition_on_previous_text=(profile.condition_on_previous_text),
-                    keep_model_loaded=profile.keep_model_loaded,
-                    provider_options=profile.provider_options,
-                ),
-                report_progress,
-                is_cancelled,
-                report_segment,
-            )
+            def report_progress(progress: float, message: str) -> None:
+                nonlocal last_progress_update
+                now = monotonic()
+                if now - last_progress_update >= _PROGRESS_UPDATE_INTERVAL_SECONDS:
+                    self.jobs.update_progress(
+                        job.uuid,
+                        0.24 + max(0.0, min(progress, 1.0)) * 0.70,
+                        message,
+                    )
+                    last_progress_update = now
+                if now - last_segment_flush >= _SEGMENT_BATCH_INTERVAL_SECONDS:
+                    flush_segments()
+
+            def report_segment(segment: Any) -> None:
+                pending_segments.append(segment)
+                if (
+                    len(pending_segments) >= _SEGMENT_BATCH_SIZE
+                    or monotonic() - last_segment_flush >= _SEGMENT_BATCH_INTERVAL_SECONDS
+                ):
+                    flush_segments()
+
+            try:
+                result = await self.engine.transcribe(
+                    TranscriptionEngineRequest(
+                        audio_path=Path(normalized.local_path),
+                        model=profile.model,
+                        device=profile.device,
+                        compute_type=profile.compute_type,
+                        language=job.payload.get("language"),
+                        task=str(job.payload.get("task", "transcribe")),
+                        beam_size=profile.beam_size,
+                        vad_filter=profile.vad_filter,
+                        allow_model_download=bool(job.payload.get("allow_model_download", False)),
+                        engine=profile.engine,
+                        device_index=profile.device_index,
+                        cpu_threads=profile.cpu_threads,
+                        num_workers=profile.num_workers,
+                        vad_min_silence_ms=profile.vad_min_silence_ms,
+                        word_timestamps=profile.word_timestamps,
+                        condition_on_previous_text=(profile.condition_on_previous_text),
+                        keep_model_loaded=profile.keep_model_loaded,
+                        provider_options=profile.provider_options,
+                    ),
+                    report_progress,
+                    is_cancelled,
+                    report_segment,
+                )
+            finally:
+                # Keep the visible partial transcript current if the engine
+                # raises or cancellation is requested before its next callback.
+                flush_segments()
             await context.raise_if_cancelled()
             await context.update(0.96, "Saving the final transcript")
             completed = self.transcriptions.complete(

@@ -3,6 +3,7 @@ from __future__ import annotations
 import asyncio
 import io
 import shutil
+import threading
 import time
 import wave
 from collections.abc import Iterator
@@ -10,6 +11,7 @@ from contextlib import contextmanager
 from pathlib import Path
 from typing import Any
 
+import pytest
 from fastapi.testclient import TestClient
 
 from local_meeting_ai.api.app import create_app
@@ -21,6 +23,7 @@ from local_meeting_ai.domain.entities import (
     TranscriptionEngineRequest,
     TranscriptionResult,
 )
+from local_meeting_ai.domain.errors import JobCancelledError
 from local_meeting_ai.domain.protocols import (
     CancellationCheck,
     ProgressReporter,
@@ -138,6 +141,46 @@ class CompositeTranscriptionEngine(FakeTranscriptionEngine):
                 DiarizationSegment(start_ms=1200, end_ms=2800, speaker=1),
             ],
         )
+
+
+class InterruptedTranscriptionEngine(FakeTranscriptionEngine):
+    def __init__(self, *, wait_for_cancel: bool) -> None:
+        self.wait_for_cancel = wait_for_cancel
+        self.segments_emitted = threading.Event()
+
+    async def transcribe(
+        self,
+        request: TranscriptionEngineRequest,
+        progress: ProgressReporter,
+        is_cancelled: CancellationCheck,
+        segment_ready: SegmentReporter,
+    ) -> TranscriptionResult:
+        del request, progress
+        for index, text in enumerate(("First partial sentence.", "Second partial sentence.")):
+            segment_ready(
+                SegmentDraft(
+                    index=index,
+                    start_ms=index * 1000,
+                    end_ms=(index + 1) * 1000,
+                    text=text,
+                )
+            )
+        # Revisions from some engines should replace the same index, not duplicate it.
+        segment_ready(
+            SegmentDraft(
+                index=1,
+                start_ms=1000,
+                end_ms=2000,
+                text="Corrected second partial sentence.",
+            )
+        )
+        self.segments_emitted.set()
+        if self.wait_for_cancel:
+            for _ in range(500):
+                if is_cancelled():
+                    raise JobCancelledError("Transcription was cancelled")
+                await asyncio.sleep(0.01)
+        raise RuntimeError("Simulated transcription failure")
 
 
 def _wav_bytes() -> bytes:
@@ -293,6 +336,37 @@ def test_transcription_pipeline_editor_and_versions(tmp_path: Path) -> None:
         )
         assert meeting_redirect.status_code == 307
         assert meeting_redirect.headers["location"] == f"/?meeting={meeting['id']}"
+
+
+@pytest.mark.parametrize("wait_for_cancel", [False, True])
+def test_partial_transcript_is_flushed_on_failure_or_cancellation(
+    tmp_path: Path,
+    wait_for_cancel: bool,
+) -> None:
+    engine = InterruptedTranscriptionEngine(wait_for_cancel=wait_for_cancel)
+    with _client(tmp_path, engine) as client:
+        meeting = client.post("/api/meetings", json={"title": "Partial transcript"}).json()
+        client.post(
+            f"/api/meetings/{meeting['id']}/import",
+            files={"file": ("partial.wav", _wav_bytes(), "audio/wav")},
+        )
+        started = client.post(
+            f"/api/meetings/{meeting['id']}/transcriptions",
+            json={"profile_id": "balanced", "language": "en"},
+        ).json()
+
+        if wait_for_cancel:
+            assert engine.segments_emitted.wait(timeout=5)
+            client.post(f"/api/jobs/{started['job']['uuid']}/cancel")
+        terminal = _wait_for_job(client, started["job"]["uuid"])
+        assert terminal["status"] == ("cancelled" if wait_for_cancel else "failed")
+
+        detail = client.get(f"/api/transcriptions/{started['transcription']['id']}").json()
+        assert [segment["text"] for segment in detail["segments"]] == [
+            "First partial sentence.",
+            "Corrected second partial sentence.",
+        ]
+        assert all(not segment["is_final"] for segment in detail["segments"])
 
 
 def test_meeting_audio_can_be_deleted_without_removing_transcript(tmp_path: Path) -> None:
