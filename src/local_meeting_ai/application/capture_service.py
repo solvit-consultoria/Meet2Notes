@@ -95,6 +95,7 @@ class LiveCaptureService:
         return {
             **self.backend.capability(),
             "realtime_transcription": True,
+            "realtime_transcription_default": False,
             "realtime_chunk_seconds": (
                 float(config["realtime_chunk_seconds"]) if configured else self.chunk_seconds
             ),
@@ -116,6 +117,7 @@ class LiveCaptureService:
         task: str | None,
         allow_model_download: bool,
         source_ids: list[str] | None = None,
+        realtime_transcription: bool = False,
     ) -> LiveCaptureSession:
         with self._lock:
             if self._session is not None:
@@ -159,6 +161,7 @@ class LiveCaptureService:
                     task=resolved_task,
                     allow_model_download=allow_model_download,
                     title=resolved_title,
+                    realtime_transcription=realtime_transcription,
                 )
                 session_id = str(uuid4())
                 destination = self.storage.new_live_capture_path(meeting.uuid)
@@ -192,9 +195,14 @@ class LiveCaptureService:
                 started_at=started_at,
                 profile_id=profile.id,
                 language=clean_language,
-                realtime_status=self._realtime_status,
-                realtime_message=self._realtime_message,
+                realtime_status=(self._realtime_status if realtime_transcription else "listening"),
+                realtime_message=(
+                    self._realtime_message
+                    if realtime_transcription
+                    else "Recording audio; transcription will run after the call"
+                ),
                 segment_count=0,
+                realtime_transcription=realtime_transcription,
             )
             self._session = session
             self._profile = profile
@@ -209,13 +217,13 @@ class LiveCaptureService:
                 "meeting_uuid": meeting.uuid,
             }
             self._realtime_task = asyncio.create_task(
-                self._run_realtime(session_id),
-                name=f"live-transcription-{session_id}",
+                self._run_realtime(session_id, realtime_transcription=realtime_transcription),
+                name=f"live-capture-pump-{session_id}",
             )
             logger.info(
-                "Live transcription started from %s with %s-second chunks",
+                "Live capture started from %s (realtime transcription: %s)",
                 session.source.name,
-                self._active_chunk_seconds,
+                realtime_transcription,
             )
             if self.webhooks is not None:
                 self.webhooks.publish_live_session("live.session.started", session)
@@ -264,6 +272,9 @@ class LiveCaptureService:
             self._stopping = True
             realtime_task = self._realtime_task
             settings = dict(self._settings or {})
+            # Offline capture always creates its first transcript from the saved
+            # masters. Ignore legacy/UI requests to keep an empty live transcript.
+            final_transcription = final_transcription or not session.realtime_transcription
         # Close the recording first. Model inference may be slow or stuck in a
         # native runtime; it must never keep the WAV writer open indefinitely.
         try:
@@ -280,11 +291,14 @@ class LiveCaptureService:
                 "duration_ms": captured.duration_ms,
             },
         )
-        if realtime_finished:
+        if realtime_finished and session.realtime_transcription:
             try:
                 await asyncio.wait_for(self._process_available_audio(force=True), timeout=3)
             except Exception as error:
-                logger.warning("Final real-time window was skipped; saved audio remains available: %s", error)
+                logger.warning(
+                    "Final real-time window was skipped; saved audio remains available: %s",
+                    error,
+                )
 
         stopped_session = LiveCaptureSession(
             session_id=session.session_id,
@@ -301,34 +315,43 @@ class LiveCaptureService:
             started_at=session.started_at,
             profile_id=session.profile_id,
             language=session.language,
+            realtime_transcription=session.realtime_transcription,
             realtime_status="finalizing",
-            realtime_message="Refining the complete transcript",
+            realtime_message=(
+                "Refining the complete transcript"
+                if session.realtime_transcription
+                else "Audio saved; final transcription queued"
+            ),
             segment_count=len(self._live_segments),
         )
         if self.webhooks is not None:
             self.webhooks.publish_live_session("live.session.stopped", stopped_session)
         if self.live_assistant is not None:
             self.live_assistant.session_stopped(stopped_session)
-        recording, import_job = await self.import_service.register_capture(
-            session.meeting_id,
-            captured,
-        )
-        transcription, transcription_job = await self.transcription_service.finalize_realtime(
-            session.transcription_id,
-            recording.id,
-            profile_id=str(settings["profile_id"]),
-            language=settings.get("language"),
-            task=str(settings.get("task", "transcribe")),
-            allow_model_download=bool(settings.get("allow_model_download", False)),
-            run_final_pass=final_transcription,
-            postprocess_options=postprocess_options,
-        )
-        with self._lock:
-            self._session = None
-            self._settings = None
-            self._profile = None
-            self._realtime_task = None
-            self._stopping = False
+        try:
+            recording, import_job = await self.import_service.register_capture(
+                session.meeting_id,
+                captured,
+            )
+            transcription, transcription_job = await self.transcription_service.finalize_realtime(
+                session.transcription_id,
+                recording.id,
+                profile_id=str(settings["profile_id"]),
+                language=settings.get("language"),
+                task=str(settings.get("task", "transcribe")),
+                allow_model_download=bool(settings.get("allow_model_download", False)),
+                run_final_pass=final_transcription,
+                postprocess_options=postprocess_options,
+            )
+        finally:
+            # Once the backend has closed, always release the in-memory session.
+            # A queue/persistence error must not leave a phantom active capture.
+            with self._lock:
+                self._session = None
+                self._settings = None
+                self._profile = None
+                self._realtime_task = None
+                self._stopping = False
         logger.info(
             "Live transcription stopped after %.1f seconds; final processing queued",
             captured.duration_ms / 1000,
@@ -392,7 +415,7 @@ class LiveCaptureService:
         try:
             await asyncio.wait_for(asyncio.shield(task), timeout=3)
             return True
-        except asyncio.TimeoutError:
+        except TimeoutError:
             logger.warning("Live model did not finish promptly; preserving the saved audio")
             task.cancel()
             return False
@@ -400,7 +423,7 @@ class LiveCaptureService:
             logger.exception("Live model failed while capture was stopping")
             return False
 
-    async def _run_realtime(self, session_id: str) -> None:
+    async def _run_realtime(self, session_id: str, *, realtime_transcription: bool) -> None:
         while True:
             await asyncio.sleep(self.poll_interval)
             with self._lock:
@@ -411,7 +434,12 @@ class LiveCaptureService:
                 ):
                     return
             try:
-                await self._process_available_audio(force=False)
+                if realtime_transcription:
+                    await self._process_available_audio(force=False)
+                else:
+                    # Masters are already being written to disk by the backend.
+                    # Drain transient PCM without buffering it or invoking ASR.
+                    self.backend.drain_frames()
             except asyncio.CancelledError:
                 raise
             except Exception as error:
@@ -639,6 +667,7 @@ class LiveCaptureService:
             started_at=session.started_at,
             profile_id=session.profile_id,
             language=session.language,
+            realtime_transcription=session.realtime_transcription,
             realtime_status=self._realtime_status,
             realtime_message=self._realtime_message,
             segment_count=len(self._live_segments),

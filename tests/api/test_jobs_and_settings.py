@@ -54,6 +54,18 @@ def test_preferences_are_persisted_without_secrets(client: TestClient) -> None:
     assert invalid.status_code == 422
 
 
+def test_transcription_models_are_not_kept_in_memory_by_default(
+    client: TestClient,
+) -> None:
+    config = client.get("/api/settings").json()["faster_whisper"]
+    assert config["preload_on_start"] is False
+    assert config["keep_model_loaded"] is False
+
+    profiles = client.get("/api/models/transcription").json()
+    configured = next(profile for profile in profiles if profile["id"] == "default")
+    assert configured["keep_model_loaded"] is False
+
+
 def test_local_http_port_is_validated_and_persisted(client: TestClient) -> None:
     updated = client.put("/api/settings", json={"http_port": 8899})
 

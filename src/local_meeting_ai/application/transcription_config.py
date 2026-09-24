@@ -16,8 +16,8 @@ DEFAULT_FASTER_WHISPER_CONFIG: dict[str, Any] = {
     "condition_on_previous_text": True,
     "cpu_threads": 0,
     "num_workers": 1,
-    "keep_model_loaded": True,
-    "preload_on_start": True,
+    "keep_model_loaded": False,
+    "preload_on_start": False,
     "realtime_chunk_seconds": 3.0,
     "realtime_overlap_seconds": 1.0,
 }

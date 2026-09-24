@@ -205,14 +205,19 @@ class TranscriptionService:
         task: str | None,
         allow_model_download: bool,
         title: str | None = None,
+        realtime_transcription: bool = True,
     ) -> tuple[Transcription, ModelProfile]:
         meeting = self.meetings.get(meeting_id)
         if not meeting:
             raise NotFoundError("Meeting not found")
-        profile = self.validate_configuration(
-            profile_id,
-            purpose="live",
-            allow_model_download=allow_model_download,
+        profile = (
+            self.validate_configuration(
+                profile_id,
+                purpose="live",
+                allow_model_download=allow_model_download,
+            )
+            if realtime_transcription
+            else self.profiles.resolve(profile_id, purpose="live")
         )
         clean_language = self._resolve_language(language)
         resolved_task = self._resolve_task(task)
@@ -238,10 +243,11 @@ class TranscriptionService:
                 "keep_model_loaded": profile.keep_model_loaded,
                 "task": resolved_task,
                 "model_download_confirmed": allow_model_download,
-                "mode": "realtime",
+                "mode": "realtime" if realtime_transcription else "after_capture",
             },
         )
-        self.transcriptions.mark_running(transcription.id)
+        if realtime_transcription:
+            self.transcriptions.mark_running(transcription.id)
         running = self.transcriptions.get(transcription.id)
         assert running is not None
         return running, profile
@@ -265,14 +271,9 @@ class TranscriptionService:
         if transcription.meeting_id != recording.meeting_id:
             raise ValidationError("The live recording does not match its transcription")
         workflow_options = _postprocess_options(postprocess_options)
+        # Queue even when the model is unavailable. The recording is already
+        # safely saved; the worker can report the model/runtime failure.
         profile_id = "default"
-        if run_final_pass:
-            profile = self.validate_configuration(
-                profile_id,
-                purpose="final",
-                allow_model_download=allow_model_download,
-            )
-            profile_id = profile.id
         self.transcriptions.set_status(transcription_id, "queued")
         job = self.jobs.create(
             meeting_id=transcription.meeting_id,

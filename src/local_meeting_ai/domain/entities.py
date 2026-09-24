@@ -338,3 +338,4 @@ class LiveCaptureSession:
     sources: tuple[AudioCaptureSource, ...] = ()
     source_levels: dict[str, float] = field(default_factory=dict)
     capture_error: str | None = None
+    realtime_transcription: bool = False

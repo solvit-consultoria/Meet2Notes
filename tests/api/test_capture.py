@@ -415,7 +415,10 @@ def test_stop_closes_audio_before_waiting_for_live_model(tmp_path: Path) -> None
         service._finish_realtime_task = check_stop_order
         stopped = client.post(
             f"/api/capture/sessions/{started.json()['session_id']}/stop",
-            json={"final_transcription": False, "postprocess_options": {"diarization": False, "summary": False}},
+            json={
+                "final_transcription": False,
+                "postprocess_options": {"diarization": False, "summary": False},
+            },
         )
         assert stopped.status_code == 200, stopped.text
 
@@ -441,6 +444,8 @@ def test_live_capture_pause_stop_and_transcribe(tmp_path: Path) -> None:
         sources = client.get("/api/audio/sources")
         assert sources.status_code == 200
         assert sources.json()["capability"]["platform"] == "TestOS"
+        assert sources.json()["capability"]["realtime_transcription"] is True
+        assert sources.json()["capability"]["realtime_transcription_default"] is False
         assert sources.json()["sources"][0]["name"] == "Studio microphone"
         level = client.get("/api/audio/sources/fake:microphone:0/level")
         assert level.status_code == 200
@@ -453,6 +458,7 @@ def test_live_capture_pause_stop_and_transcribe(tmp_path: Path) -> None:
                 "title": "Customer interview",
                 "profile_id": "balanced",
                 "language": "en",
+                "realtime_transcription": True,
             },
         )
         assert started.status_code == 201
@@ -586,6 +592,62 @@ def test_live_capture_can_be_discarded_before_postprocessing(tmp_path: Path) -> 
         assert restarted.json()["meeting_id"] != session["meeting_id"]
 
 
+def test_capture_defaults_to_offline_transcription_and_queues_final_pass(tmp_path: Path) -> None:
+    app = create_app(
+        AppSettings(data_dir=tmp_path / "offline-capture-data", testing=True, open_browser=False),
+        transcription_engine=FakeTranscriptionEngine(),
+        audio_normalizer=FakeNormalizer(),
+        audio_capture_backend=FakeCaptureBackend(),
+        diarization_engine=FakeDiarizationEngine(),
+        summary_engine=FakeSummaryEngine(),
+    )
+    with TestClient(app) as client:
+        service = app.state.container.transcription_service
+
+        def model_must_not_be_required(*args: Any, **kwargs: Any) -> Any:
+            raise AssertionError("Capture must not validate or load a transcription model")
+
+        service.validate_configuration = model_must_not_be_required
+        started = client.post(
+            "/api/capture/sessions",
+            json={"source_id": "fake:microphone:0", "title": "Offline capture"},
+        )
+        assert started.status_code == 201, started.text
+        session = started.json()
+        assert session["realtime_transcription"] is False
+        assert session["realtime_status"] == "listening"
+        assert "after the call" in session["realtime_message"]
+        assert client.get(
+            f"/api/transcriptions/{session['transcription_id']}"
+        ).json()["transcription"]["status"] == "queued"
+
+        time.sleep(0.1)
+        current = client.get("/api/capture/session").json()
+        assert current["segment_count"] == 0
+        assert client.get(
+            f"/api/transcriptions/{session['transcription_id']}"
+        ).json()["segments"] == []
+
+        stopped = client.post(
+            f"/api/capture/sessions/{session['session_id']}/stop",
+            json={
+                "final_transcription": False,
+                "postprocess_options": {"diarization": False, "summary": False},
+            },
+        )
+        assert stopped.status_code == 200, stopped.text
+        payload = stopped.json()
+        assert payload["recording"]["metadata"]["capture_source_name"] == "Studio microphone"
+        assert payload["transcription_job"]["status"] in {"queued", "running", "completed"}
+        assert payload["transcription_job"]["payload"]["skip_final_pass"] is False
+        assert _wait_for_job(client, payload["transcription_job"]["uuid"])["status"] == "completed"
+        segments = client.get(
+            f"/api/transcriptions/{session['transcription_id']}"
+        ).json()["segments"]
+        assert [segment["text"] for segment in segments] == ["Captured locally."]
+        assert segments[0]["is_final"] is True
+
+
 def test_live_capture_can_keep_the_live_text_without_postprocessing(tmp_path: Path) -> None:
     settings = AppSettings(
         data_dir=tmp_path / "capture-without-final-pass-data",
@@ -606,7 +668,11 @@ def test_live_capture_can_keep_the_live_text_without_postprocessing(tmp_path: Pa
     ) as client:
         started = client.post(
             "/api/capture/sessions",
-            json={"source_id": "fake:microphone:0", "title": "Quick note"},
+            json={
+                "source_id": "fake:microphone:0",
+                "title": "Quick note",
+                "realtime_transcription": True,
+            },
         )
         assert started.status_code == 201
         session = started.json()

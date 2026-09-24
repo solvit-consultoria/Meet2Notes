@@ -329,5 +329,5 @@ def _advanced_profile_values(config: dict[str, Any]) -> dict[str, Any]:
         "vad_min_silence_ms": int(config["vad_min_silence_ms"]),
         "word_timestamps": bool(config["word_timestamps"]),
         "condition_on_previous_text": bool(config["condition_on_previous_text"]),
-        "keep_model_loaded": True,
+        "keep_model_loaded": bool(config["keep_model_loaded"]),
     }

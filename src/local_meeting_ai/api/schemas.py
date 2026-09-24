@@ -116,8 +116,8 @@ class FasterWhisperPreference(BaseModel):
     condition_on_previous_text: bool = True
     cpu_threads: int = Field(default=0, ge=0, le=128)
     num_workers: int = Field(default=1, ge=1, le=4)
-    keep_model_loaded: bool = True
-    preload_on_start: bool = True
+    keep_model_loaded: bool = False
+    preload_on_start: bool = False
     realtime_chunk_seconds: float = Field(default=3.0, ge=1.0, le=30.0)
     realtime_overlap_seconds: float = Field(default=1.0, ge=0.0, le=10.0)
 
@@ -703,6 +703,7 @@ class LiveCaptureStart(BaseModel):
     language: str | None = Field(default=None, max_length=20)
     task: Literal["transcribe", "translate"] | None = None
     allow_model_download: bool = False
+    realtime_transcription: bool = False
 
     @model_validator(mode="after")
     def validate_sources(self) -> Self:
@@ -737,6 +738,7 @@ class LiveCaptureSessionResponse(BaseModel):
     started_at: str
     profile_id: str
     language: str | None
+    realtime_transcription: bool = False
     realtime_status: Literal[
         "warming_up",
         "transcribing",
