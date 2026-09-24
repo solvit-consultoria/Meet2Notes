@@ -85,6 +85,11 @@
   let liveTranscriptionEnabled = false;
   try { liveTranscriptionEnabled = window.localStorage.getItem(liveTranscriptionPreferenceKey) === "true"; }
   catch { /* Storage may be unavailable in private contexts. */ }
+
+  function supportsRealtimeTranscriptionOption() {
+    return captureCapability.realtime_transcription === true
+      && captureCapability.realtime_transcription_default === false;
+  }
   let latestActivityId = 0;
   let performancePollTimer = null;
   let performancePollBusy = false;
@@ -620,7 +625,7 @@
     filePanel.classList.toggle("hidden", mode !== "file");
     document.querySelector("#live-transcription-choice").classList.toggle("hidden", mode === "file");
     const realtimeToggle = document.querySelector("#realtime-transcription");
-    const realtimeSupported = captureCapability.realtime_transcription === true;
+    const realtimeSupported = supportsRealtimeTranscriptionOption();
     realtimeToggle.disabled = !realtimeSupported;
     document.querySelector("#live-transcription-restart").classList.toggle("hidden", realtimeSupported);
     if (!realtimeSupported) {
@@ -2214,7 +2219,7 @@
   async function startNativeCapture() {
     const selected = selectedNativeSources();
     if (!selected.length) throw new Error("Choose an available audio source.");
-    const realtimeSupported = captureCapability.realtime_transcription === true;
+    const realtimeSupported = supportsRealtimeTranscriptionOption();
     liveTranscriptionEnabled = realtimeSupported
       ? document.querySelector("#realtime-transcription").checked
       : true;

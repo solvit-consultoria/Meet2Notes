@@ -132,6 +132,9 @@ def test_live_transcription_is_optional_and_final_pass_follows_stop(client) -> N
     root = Path(__file__).parents[2]
     script = (root / "src/local_meeting_ai/web/static/js/transcript.js").read_text(encoding="utf-8")
     assert 'meet2notes.live-transcription.v1' in script
+    assert "captureCapability.realtime_transcription === true" in script
+    assert "captureCapability.realtime_transcription_default === false" in script
+    assert "supportsRealtimeTranscriptionOption()" in script
     assert 'setItem(liveTranscriptionPreferenceKey, String(liveTranscriptionEnabled))' in script
     assert (
         'realtime_transcription: document.querySelector("#realtime-transcription").checked'
