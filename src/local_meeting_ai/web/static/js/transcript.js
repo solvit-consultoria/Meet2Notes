@@ -17,6 +17,9 @@
   const startDialog = document.querySelector("#transcription-dialog");
   const titleDisplay = document.querySelector("#transcription-title-display");
   const titleInput = document.querySelector("#transcription-title-input");
+  const manualNotesPanel = document.querySelector("#manual-notes-panel");
+  const manualNotesInput = document.querySelector("#manual-notes-input");
+  const manualNotesStatus = document.querySelector("#manual-notes-status");
   const activityOutput = document.querySelector("#activity-log-output");
   const activityResizer = document.querySelector("#activity-log-resizer");
   const transcriptionWorkspace = document.querySelector("#transcription-workspace");
@@ -52,6 +55,7 @@
   let noteFormats = [];
   let engineCapabilities = {};
   let preferences = {};
+  let manualNotesTimer = null;
   let activeTranscriptionId = null;
   let activeJob = null;
   let captureSession = null;
@@ -212,6 +216,7 @@
         api("/api/audio/sources"),
         api("/api/capture/session"),
         api("/api/settings"),
+        api("/api/mvp/settings"),
         api("/api/summary-templates"),
       ];
       const meetingRequests = meetingId
@@ -234,6 +239,7 @@
         sourceData,
         currentCapture,
         preferenceData,
+        mvpSettings,
         summaryTemplates,
         meetingData,
         recordingData,
@@ -244,8 +250,19 @@
 
       engineCapabilities = capabilities;
       preferences = preferenceData;
+      const setupBanner = document.querySelector("#meeting-setup-banner");
+      const setupMessage = document.querySelector("#meeting-setup-message");
+      if (setupBanner && setupMessage) {
+        const missing = [];
+        if (!preferenceData.faster_whisper?.language) missing.push("idioma da transcrição");
+        if (!mvpSettings.export_root) missing.push("pasta de exportação");
+        setupBanner.classList.toggle("hidden", Boolean(currentCapture) || missing.length === 0);
+        if (missing.length) setupMessage.textContent =
+          `Defina ${missing.join(" e ")} antes de usar em reuniões reais. Microfone e áudio do sistema serão sugeridos juntos.`;
+      }
       noteFormats = summaryTemplates;
       currentMeeting = meetingData;
+      renderManualNotes();
       captureCapability = sourceData.capability || {};
       audioSources = sourceData.sources || [];
       recordings = recordingData;
@@ -317,6 +334,7 @@
       api(`/api/meetings/${meetingId}/summaries`),
     ]);
     currentMeeting = meetingData;
+    renderManualNotes();
     recordings = recordingData;
     versions = versionData;
     meetingSummaries = summaryData;
@@ -337,6 +355,36 @@
     draftTitle = value || page.dataset.defaultTitle || "Nova transcrição";
     titleDisplay.textContent = draftTitle;
     titleDisplay.title = `Clique para renomear “${draftTitle}”`;
+  }
+
+  function renderManualNotes() {
+    if (!manualNotesPanel || !manualNotesInput) return;
+    manualNotesPanel.classList.toggle("hidden", !meetingId);
+    if (currentMeeting && manualNotesInput.dataset.dirty !== "true") {
+      manualNotesInput.value = currentMeeting.description || "";
+    }
+  }
+
+  async function saveManualNotes() {
+    if (!meetingId || !manualNotesInput || !manualNotesStatus) return;
+    window.clearTimeout(manualNotesTimer);
+    const savedMeetingId = meetingId;
+    const description = manualNotesInput.value;
+    manualNotesStatus.textContent = "Salvando…";
+    try {
+      const updated = await api(`/api/meetings/${savedMeetingId}`, {
+        method: "PATCH",
+        body: JSON.stringify({ description }),
+      });
+      if (meetingId === savedMeetingId && manualNotesInput.value === description) {
+        currentMeeting = updated;
+        delete manualNotesInput.dataset.dirty;
+        manualNotesStatus.textContent = "Salvo localmente";
+      }
+    } catch (error) {
+      manualNotesStatus.textContent = "Não foi possível salvar";
+      toast(error.message, "error");
+    }
   }
 
   function beginRename() {
@@ -549,7 +597,7 @@
     });
   }
 
-  function scheduleSourcePreview(delay = 120) {
+  function scheduleSourcePreview(delay = 500) {
     if (sourcePreviewTimer) window.clearTimeout(sourcePreviewTimer);
     sourcePreviewTimer = null;
     if (!startDialog.open || selectedSourceMode() === "file") {
@@ -590,7 +638,7 @@
       }
     } finally {
       sourcePreviewBusy = false;
-      scheduleSourcePreview(180);
+      scheduleSourcePreview(1500);
     }
   }
 
@@ -1792,6 +1840,10 @@
   function openStartDialog() {
     document.querySelector("#transcription-form").reset();
     document.querySelector('input[name="source-mode"][value="microphone"]').checked = true;
+    // A meeting needs both sides of the call. The device picker below still
+    // lets the user change either default before capture starts.
+    document.querySelector('input[name="source-mode"][value="system"]').checked =
+      audioSources.some((source) => source.kind === "system" && source.available !== false);
     renderSources();
     resetFilePicker();
     startDialog.showModal();
@@ -1848,6 +1900,8 @@
     });
     captureSession = session;
     meetingId = String(session.meeting_id);
+    currentMeeting = { description: "" };
+    renderManualNotes();
     activeTranscriptionId = Number(session.transcription_id);
     lastLiveSegmentCount = -1;
     page.dataset.meetingId = meetingId;
@@ -3093,6 +3147,13 @@
 
   async function initializeWorkspace() {
     bindActivityLog();
+    manualNotesInput?.addEventListener("input", () => {
+      manualNotesInput.dataset.dirty = "true";
+      manualNotesStatus.textContent = "Alterações pendentes";
+      window.clearTimeout(manualNotesTimer);
+      manualNotesTimer = window.setTimeout(saveManualNotes, 1000);
+    });
+    document.querySelector("#manual-notes-save")?.addEventListener("click", saveManualNotes);
     initializeLiveAssistantWidget();
     await loadWorkspace();
     syncStartAction();

@@ -389,6 +389,37 @@ def test_combined_capture_api_keeps_both_sources_through_pause_and_save(tmp_path
         assert metadata["capture_sources"][1]["name"] == "Headphones"
 
 
+def test_stop_closes_audio_before_waiting_for_live_model(tmp_path: Path) -> None:
+    backend = FakeCaptureBackend()
+    app = create_app(
+        AppSettings(data_dir=tmp_path / "stop-order", testing=True, open_browser=False),
+        transcription_engine=FakeTranscriptionEngine(),
+        audio_normalizer=FakeNormalizer(),
+        audio_capture_backend=backend,
+        diarization_engine=FakeDiarizationEngine(),
+        summary_engine=FakeSummaryEngine(),
+    )
+    with TestClient(app) as client:
+        started = client.post(
+            "/api/capture/sessions",
+            json={"source_id": "fake:microphone:0", "title": "Stop order"},
+        )
+        assert started.status_code == 201, started.text
+        service = app.state.container.capture_service
+        original_finish = service._finish_realtime_task
+
+        async def check_stop_order(task: asyncio.Task[None] | None) -> bool:
+            assert backend.status() is None, "Audio must close before waiting for inference"
+            return await original_finish(task)
+
+        service._finish_realtime_task = check_stop_order
+        stopped = client.post(
+            f"/api/capture/sessions/{started.json()['session_id']}/stop",
+            json={"final_transcription": False, "postprocess_options": {"diarization": False, "summary": False}},
+        )
+        assert stopped.status_code == 200, stopped.text
+
+
 def test_live_capture_pause_stop_and_transcribe(tmp_path: Path) -> None:
     settings = AppSettings(
         data_dir=tmp_path / "capture-data",

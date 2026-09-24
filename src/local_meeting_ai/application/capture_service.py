@@ -264,10 +264,15 @@ class LiveCaptureService:
             self._stopping = True
             realtime_task = self._realtime_task
             settings = dict(self._settings or {})
-        if realtime_task is not None:
-            await asyncio.gather(realtime_task, return_exceptions=True)
-
-        captured = self.backend.stop()
+        # Close the recording first. Model inference may be slow or stuck in a
+        # native runtime; it must never keep the WAV writer open indefinitely.
+        try:
+            captured = self.backend.stop()
+        except Exception:
+            with self._lock:
+                self._stopping = False
+            raise
+        realtime_finished = await self._finish_realtime_task(realtime_task)
         self.meetings.update(
             session.meeting_id,
             {
@@ -275,10 +280,11 @@ class LiveCaptureService:
                 "duration_ms": captured.duration_ms,
             },
         )
-        try:
-            await self._process_available_audio(force=True)
-        except Exception as error:
-            logger.exception("Could not process the final real-time audio window: %s", error)
+        if realtime_finished:
+            try:
+                await asyncio.wait_for(self._process_available_audio(force=True), timeout=3)
+            except Exception as error:
+                logger.warning("Final real-time window was skipped; saved audio remains available: %s", error)
 
         stopped_session = LiveCaptureSession(
             session_id=session.session_id,
@@ -350,8 +356,6 @@ class LiveCaptureService:
             self._stopping = True
             realtime_task = self._realtime_task
 
-        if realtime_task is not None:
-            await asyncio.gather(realtime_task, return_exceptions=True)
         try:
             self.backend.stop()
         except Exception:
@@ -359,6 +363,7 @@ class LiveCaptureService:
             # already released its stream unexpectedly.
             logger.exception("Could not stop audio cleanly while discarding live capture")
         finally:
+            await self._finish_realtime_task(realtime_task)
             with self._lock:
                 self._session = None
                 self._settings = None
@@ -376,11 +381,24 @@ class LiveCaptureService:
             self._stopping = True
             realtime_task = self._realtime_task
             transcription_id = self._session.transcription_id if self._session is not None else None
-        if realtime_task is not None:
-            await asyncio.gather(realtime_task, return_exceptions=True)
         self.backend.shutdown()
+        await self._finish_realtime_task(realtime_task)
         if transcription_id is not None:
             self.transcriptions.set_status(transcription_id, "failed")
+
+    async def _finish_realtime_task(self, task: asyncio.Task[None] | None) -> bool:
+        if task is None:
+            return True
+        try:
+            await asyncio.wait_for(asyncio.shield(task), timeout=3)
+            return True
+        except asyncio.TimeoutError:
+            logger.warning("Live model did not finish promptly; preserving the saved audio")
+            task.cancel()
+            return False
+        except Exception:
+            logger.exception("Live model failed while capture was stopping")
+            return False
 
     async def _run_realtime(self, session_id: str) -> None:
         while True:

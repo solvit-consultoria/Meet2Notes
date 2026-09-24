@@ -6,7 +6,7 @@
 
 A referência é o [site da Solvit Consultoria](https://solvitconsultoria.com.br/). A aplicação usa fundo marfim `#faf5ef` com grade sutil, vinho `#63312d` para títulos e marca, laranja `#c96022` para ações principais e estados de foco. Spectral é usada para títulos editoriais e Inter para controles e texto de interface. As fontes ficam no aplicativo para funcionar sem rede, com licenças OFL ao lado dos arquivos.
 
-O símbolo próprio reúne três linhas de conversa em um quadrado vinho. Ele sugere a estrutura de uma reunião e a fluidez da marca Solvit sem copiar o logotipo institucional.
+O símbolo usa a marca oficial da Solvit presente no cabeçalho do site institucional. A assinatura “Meeting by Solvit” identifica este produto dentro da empresa.
 
 ## Aplicação
 

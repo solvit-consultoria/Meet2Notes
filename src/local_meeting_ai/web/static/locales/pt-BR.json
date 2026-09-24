@@ -1358,7 +1358,14 @@
     "by Solvit": "by Solvit",
     "Meeting by Solvit": "Meeting by Solvit",
     "Página inicial do Meeting by Solvit": "Página inicial do Meeting by Solvit",
-    "Desligar o Meeting?": "Desligar o Meeting?"
+    "Desligar o Meeting?": "Desligar o Meeting?",
+    "Abrir configurações": "Abrir configurações",
+    "Anotações da reunião": "Anotações da reunião",
+    "Configuração inicial": "Configuração inicial",
+    "Confira o idioma e a pasta de exportação antes da primeira reunião.": "Confira o idioma e a pasta de exportação antes da primeira reunião.",
+    "Registre decisões, contexto ou pontos que a transcrição não captou.": "Registre decisões, contexto ou pontos que a transcrição não captou.",
+    "Salvar anotações": "Salvar anotações",
+    "Salvo localmente": "Salvo localmente"
   },
   "meetings.saved_count": {
     "one": "reunião salva",

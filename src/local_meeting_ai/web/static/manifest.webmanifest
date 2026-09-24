@@ -1,0 +1,15 @@
+{
+  "name": "Meeting by Solvit",
+  "short_name": "Meeting",
+  "description": "Gravação e transcrição local de reuniões",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "background_color": "#faf5ef",
+  "theme_color": "#63312d",
+  "icons": [
+    {"src": "/static/icons/solvit-16.png", "sizes": "16x16", "type": "image/png"},
+    {"src": "/static/icons/solvit-32.png", "sizes": "32x32", "type": "image/png"},
+    {"src": "/static/icons/solvit-mark.webp", "sizes": "any", "type": "image/webp"}
+  ]
+}

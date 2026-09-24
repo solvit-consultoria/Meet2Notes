@@ -3,6 +3,7 @@ from __future__ import annotations
 import hashlib
 import json
 import wave
+from dataclasses import replace
 from pathlib import Path
 
 import pytest
@@ -55,7 +56,7 @@ def _recording(meeting: Meeting, role: str, audio_path: Path, recording_id: int)
 
 
 def test_export_is_repeatable_and_has_hashes_and_separate_tracks(tmp_path: Path) -> None:
-    meeting = _meeting()
+    meeting = replace(_meeting(), description="Decisão: enviar a proposta na sexta-feira.")
     local = tmp_path / "private" / meeting.uuid
     local.mkdir(parents=True)
     root = tmp_path / "OneDrive" / "Meetings"
@@ -129,6 +130,8 @@ def test_export_is_repeatable_and_has_hashes_and_separate_tracks(tmp_path: Path)
     for name, digest in manifest["files"].items():
         assert hashlib.sha256((destination / name).read_bytes()).hexdigest() == digest
     markdown = (destination / "meeting.md").read_text(encoding="utf-8")
+    assert markdown.index("## Anotações") < markdown.index("## Transcrição")
+    assert "Decisão: enviar a proposta" in markdown
     assert "A transcrição inicial usa o mix" in markdown
     assert "`00:00:00.000`" not in markdown
     metadata = json.loads((destination / "metadata.json").read_text(encoding="utf-8"))

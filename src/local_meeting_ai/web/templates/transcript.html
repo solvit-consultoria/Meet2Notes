@@ -28,6 +28,14 @@
     </div>
   </header>
 
+  <section class="meeting-setup-banner hidden" id="meeting-setup-banner" aria-labelledby="meeting-setup-title">
+    <div>
+      <strong id="meeting-setup-title">Configuração inicial</strong>
+      <p id="meeting-setup-message">Confira o idioma e a pasta de exportação antes da primeira reunião.</p>
+    </div>
+    <a href="/settings" class="button secondary">Abrir configurações</a>
+  </section>
+
   <div class="transcription-workspace" id="transcription-workspace">
   <section class="transcription-canvas panel">
     <header class="transcription-canvas-header">
@@ -69,6 +77,14 @@
       </div>
     </header>
 
+    <details class="manual-notes-panel hidden" id="manual-notes-panel">
+      <summary><span>Anotações da reunião</span><small id="manual-notes-status">Salvo localmente</small></summary>
+      <div class="manual-notes-body">
+        <textarea id="manual-notes-input" maxlength="4000" rows="4" placeholder="Registre decisões, contexto ou pontos que a transcrição não captou." aria-label="Anotações da reunião"></textarea>
+        <button type="button" class="button secondary" id="manual-notes-save">Salvar anotações</button>
+      </div>
+    </details>
+
     <nav class="meeting-tabs hidden" id="meeting-tabs" role="tablist" aria-label="Meeting workspace">
       <button type="button" class="active" role="tab" aria-selected="true" aria-controls="meeting-tab-transcript" data-meeting-tab="transcript">
         <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 3h9l4 4v14H6zM15 3v5h5M9 12h7M9 16h7"/></svg>
@@ -104,11 +120,11 @@
 
     <section class="live-ai-assistant-widget hidden" id="live-ai-assistant" aria-label="Live AI Assistant" data-collapsed="false">
       <header class="live-ai-assistant-widget-header" id="live-ai-assistant-drag-handle">
-        <span class="live-ai-assistant-widget-icon" aria-hidden="true"><img src="/static/assets/images/live-assistant-avatar.png" alt=""></span>
+        <span class="live-ai-assistant-widget-icon" aria-hidden="true"><img src="/static/icons/solvit-mark.webp" alt=""></span>
         <div class="live-ai-assistant-widget-title"><span class="eyebrow">Native copilot</span><strong>Live AI Assistant</strong></div>
         <span class="live-ai-assistant-widget-status"><i></i><span id="live-ai-assistant-status">Idle</span></span>
         <button class="live-ai-assistant-widget-toggle" id="live-ai-assistant-toggle" type="button" aria-label="Minimize Live AI Assistant" aria-expanded="true">
-          <img class="live-ai-assistant-collapsed-avatar" src="/static/assets/images/live-assistant-avatar.png" alt="" aria-hidden="true">
+          <img class="live-ai-assistant-collapsed-avatar" src="/static/icons/solvit-mark.webp" alt="" aria-hidden="true">
           <svg viewBox="0 0 24 24" aria-hidden="true"><path d="m7 10 5 5 5-5"/></svg>
         </button>
       </header>

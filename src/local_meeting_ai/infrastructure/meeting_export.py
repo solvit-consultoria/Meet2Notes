@@ -191,9 +191,10 @@ def _render_markdown(
         "> A transcrição inicial usa o mix dos canais de microfone e sistema. "
         "Os nomes de falante não identificam qual canal originou cada fala.",
         "",
-        "## Transcrição",
-        "",
     ]
+    if meeting.description:
+        lines.extend(["## Anotações", "", meeting.description.strip(), ""])
+    lines.extend(["## Transcrição", ""])
     if transcription is None or not segments:
         lines.append("_Ainda não há transcrição disponível._")
     else:

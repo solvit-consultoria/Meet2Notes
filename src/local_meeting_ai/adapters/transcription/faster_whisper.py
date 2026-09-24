@@ -6,6 +6,7 @@ import importlib
 import importlib.util
 import logging
 import math
+import sys
 import threading
 from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
@@ -343,6 +344,12 @@ class FasterWhisperEngine:
         num_workers: int,
         allow_model_download: bool,
     ) -> tuple[Any, threading.BoundedSemaphore, tuple[Any, ...]]:
+        if device == "auto" and not self._runtime_capability["cuda_devices"]:
+            device = "cpu"
+        elif device == "cuda" and not self._runtime_capability["cuda_devices"]:
+            raise CapabilityUnavailableError(
+                "CUDA transcription is unavailable. Select CPU in transcription settings."
+            )
         key = (
             model,
             device,
@@ -490,6 +497,16 @@ def _detect_runtime_capability() -> dict[str, Any]:
                 getattr(ctranslate2, "__version__", "installed")
             )
             cuda_devices = int(ctranslate2.get_cuda_device_count())
+            if cuda_devices and sys.platform == "win32":
+                # A driver can expose the GPU while the CUDA math runtime
+                # required for inference is absent. Prefer a working CPU path.
+                import ctypes
+
+                try:
+                    ctypes.WinDLL("cublas64_12.dll")
+                except OSError:
+                    logger.warning("CUDA GPU detected without cublas64_12.dll; using CPU")
+                    cuda_devices = 0
             compute_types["cpu"] = sorted(
                 ctranslate2.get_supported_compute_types("cpu")
             )

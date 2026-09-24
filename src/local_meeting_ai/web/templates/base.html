@@ -6,7 +6,8 @@
   <meta name="color-scheme" content="light dark">
   <meta name="theme-color" content="#faf5ef">
   <title>{% block title %}Meeting by Solvit{% endblock %}</title>
-  <link rel="icon" href="/static/icons/meeting-solvit.svg" type="image/svg+xml">
+  <link rel="icon" href="/static/icons/solvit.ico" type="image/x-icon">
+  <link rel="manifest" href="/static/manifest.webmanifest">
   <script src="/static/js/theme-bootstrap.js?v={{ asset_version }}"></script>
   <link rel="stylesheet" href="/static/css/app.css?v={{ asset_version }}">
   <link rel="stylesheet" href="/static/css/ui-refresh.css?v={{ asset_version }}">
@@ -18,7 +19,7 @@
   <div class="app-shell">
     <aside class="sidebar" id="sidebar">
       <a class="brand" id="sidebar-brand" href="/" aria-label="Página inicial do Meeting by Solvit" data-i18n-aria-label="brand.home">
-        <img class="brand-mark" src="/static/icons/meeting-solvit.svg" alt="">
+        <img class="brand-mark" src="/static/icons/solvit-mark.webp" alt="">
         <span>
           <strong>Meeting</strong>
           <small data-i18n="brand.subtitle">by Solvit</small>
@@ -78,7 +79,7 @@
 
     <div class="mobile-header">
       <a class="mobile-brand" href="/">
-        <img src="/static/icons/meeting-solvit.svg" alt="">
+        <img src="/static/icons/solvit-mark.webp" alt="">
         <strong>Meeting</strong>
       </a>
       <button class="icon-button" id="menu-toggle" aria-label="Open navigation" aria-expanded="false" data-i18n-aria-label="nav.open">

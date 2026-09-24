@@ -215,9 +215,9 @@
       const state = JSON.parse(localStorage.getItem(storageKey) || "{}");
       if (Number.isFinite(state.width)) widget.style.width = `${Math.max(300, state.width)}px`;
       if (Number.isFinite(state.height)) widget.style.height = `${Math.max(300, state.height)}px`;
-      setCollapsed(Boolean(state.collapsed), false);
+      setCollapsed(state.collapsed !== false, false);
     } catch {
-      setCollapsed(false, false);
+      setCollapsed(true, false);
     }
   }
 
