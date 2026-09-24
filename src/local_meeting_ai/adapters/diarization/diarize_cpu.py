@@ -11,6 +11,7 @@ import asyncio
 import json
 import logging
 import os
+import queue
 import subprocess
 import sys
 import threading
@@ -27,6 +28,8 @@ from local_meeting_ai.domain.protocols import CancellationCheck, ProgressReporte
 
 logger = logging.getLogger(__name__)
 DIARIZE_VERSION = "0.1.2"
+_WORKER_READ_POLL_SECONDS = 0.25
+_WORKER_TIMEOUT_SECONDS = 60 * 60
 
 
 class DiarizeCpuEngine:
@@ -172,7 +175,7 @@ class DiarizeCpuEngine:
                 "audio_path": str(audio_path),
                 "num_speakers": _known_speaker_count(config),
             }
-            response = self._request_worker(request)
+            response = self._request_worker(request, is_cancelled)
             if is_cancelled():
                 raise JobCancelledError("Diarization was cancelled")
             if not bool(response.get("ok")):
@@ -281,27 +284,90 @@ class DiarizeCpuEngine:
         )
         self._set_state("ready")
 
-    def _request_worker(self, request: dict[str, Any]) -> dict[str, Any]:
+    def _request_worker(
+        self,
+        request: dict[str, Any],
+        is_cancelled: CancellationCheck = lambda: False,
+    ) -> dict[str, Any]:
         process = self._process
         if process is None or process.stdin is None or process.stdout is None:
             raise CapabilityUnavailableError("The diarize CPU worker did not start")
-        process.stdin.write(json.dumps(request) + "\n")
-        process.stdin.flush()
-        deadline = time.monotonic() + 60 * 60
-        while time.monotonic() < deadline:
-            line = process.stdout.readline()
-            if line:
-                try:
-                    response = json.loads(line)
-                except json.JSONDecodeError:
-                    logger.warning("Ignoring unexpected diarize worker output: %s", line.strip())
-                    continue
-                return response if isinstance(response, dict) else {}
-            if process.poll() is not None:
+        lines: queue.Queue[str | None] = queue.Queue()
+
+        def read_response() -> None:
+            try:
+                lines.put(process.stdout.readline())
+            except (OSError, ValueError):
+                lines.put(None)
+
+        try:
+            process.stdin.write(json.dumps(request) + "\n")
+            process.stdin.flush()
+        except (OSError, ValueError) as error:
+            self._stop_worker(process)
+            raise CapabilityUnavailableError(
+                "Could not send a request to the diarize CPU worker"
+            ) from error
+
+        reader = threading.Thread(
+            target=read_response,
+            name="diarize-cpu-output-reader",
+            daemon=True,
+        )
+        reader.start()
+        deadline = time.monotonic() + _WORKER_TIMEOUT_SECONDS
+        while True:
+            if is_cancelled():
+                self._stop_worker(process)
+                raise JobCancelledError("Diarization was cancelled")
+            remaining = deadline - time.monotonic()
+            if remaining <= 0:
+                self._stop_worker(process)
+                raise CapabilityUnavailableError("The diarize CPU worker timed out")
+            try:
+                line = lines.get(timeout=min(_WORKER_READ_POLL_SECONDS, remaining))
+            except queue.Empty:
+                if process.poll() is not None:
+                    raise CapabilityUnavailableError(
+                        "The diarize CPU worker stopped unexpectedly. See the application log."
+                    ) from None
+                continue
+            if not line:
+                if process.poll() is not None:
+                    raise CapabilityUnavailableError(
+                        "The diarize CPU worker stopped unexpectedly. See the application log."
+                    )
+                # A live worker should always produce a complete protocol line.
+                self._stop_worker(process)
                 raise CapabilityUnavailableError(
-                    "The diarize CPU worker stopped unexpectedly. See the application log."
+                    "The diarize CPU worker closed its output unexpectedly"
                 )
-        raise CapabilityUnavailableError("The diarize CPU worker timed out")
+            try:
+                response = json.loads(line)
+            except json.JSONDecodeError:
+                logger.warning("Ignoring unexpected diarize worker output: %s", line.strip())
+                reader = threading.Thread(
+                    target=read_response,
+                    name="diarize-cpu-output-reader",
+                    daemon=True,
+                )
+                reader.start()
+                continue
+            return response if isinstance(response, dict) else {}
+
+    def _stop_worker(self, process: subprocess.Popen[str]) -> None:
+        if self._process is process:
+            self._process = None
+        if process.poll() is None:
+            process.terminate()
+            try:
+                process.wait(timeout=5)
+            except subprocess.TimeoutExpired:
+                process.kill()
+                try:
+                    process.wait(timeout=5)
+                except subprocess.TimeoutExpired:
+                    logger.warning("Diarize CPU worker did not exit after kill")
 
     def _runtime_python(self) -> Path:
         return self.runtime_dir / (
