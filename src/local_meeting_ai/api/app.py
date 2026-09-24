@@ -15,6 +15,7 @@ from starlette.middleware.trustedhost import TrustedHostMiddleware
 
 from local_meeting_ai import __version__
 from local_meeting_ai.api.live_assistant_routes import router as live_assistant_router
+from local_meeting_ai.api.mvp_routes import router as mvp_router
 from local_meeting_ai.api.routes import router as api_router
 from local_meeting_ai.api.webhook_routes import router as webhook_router
 from local_meeting_ai.bootstrap import Container, build_container
@@ -201,6 +202,7 @@ def create_app(
 
     app.mount("/static", StaticFiles(directory=static_dir), name="static")
     app.include_router(api_router)
+    app.include_router(mvp_router)
     app.include_router(live_assistant_router)
     app.include_router(webhook_router)
     _register_web_routes(app, templates, container)

@@ -1,4 +1,20 @@
-# Safe updates
+# Updates in the Solvit fork
+
+Automatic and in-place updates are disabled for this fork. The `start.bat`
+launcher does not check upstream releases, `update.bat` exits with a fork notice,
+and `update.ps1` retains the upstream repository check and refuses to run when
+`origin` is `solvit-consultoria/Meet2Notes`. Do not change the expected upstream
+remote as a shortcut: a future Solvit updater must preserve the clean-tree,
+backup, ancestry, migration-validation and rollback protections below.
+
+Until that updater is reviewed, install an approved fork branch into a separate
+checkout, back up the active local data directory, and follow that branch's
+migration notes. Keep audio, database files, provider keys and model weights out
+of Git.
+
+---
+
+# Upstream safe update design
 
 Meet2Notes checks GitHub once every 24 hours for a newer stable Release. The check
 runs before the local server starts, has a short timeout, sends no meeting data,

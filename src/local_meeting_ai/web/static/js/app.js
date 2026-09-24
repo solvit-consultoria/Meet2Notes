@@ -4,7 +4,7 @@
   const jobSubscribers = new Set();
   const activitySubscribers = new Set();
   let eventSource = null;
-  let currentLanguage = "en";
+  let currentLanguage = "pt-BR";
   let currentThemePreference = document.documentElement.dataset.themePreference || "system";
   let lastSidebarSystemState = null;
   let sidebarSystemTimer = null;
@@ -27,7 +27,7 @@
   window.addEventListener("load", () => {
     timingLog("page fully loaded", { elapsed_ms: Math.round(performance.now()) });
   }, { once: true });
-  const defaultLanguage = "en";
+  const defaultLanguage = "pt-BR";
   const loadedLanguages = new Set();
   const originalText = new WeakMap();
   const originalAttributes = new WeakMap();

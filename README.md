@@ -1,3 +1,33 @@
+## Fork MVP da Solvit Consultoria
+
+Este fork público parte da tag MIT [`v0.6.1`](https://github.com/estebanstifli/Meet2Notes/tree/v0.6.1) do [Meet2Notes original](https://github.com/estebanstifli/Meet2Notes). O remoto original permanece como `upstream`; este repositório é o `origin` da personalização.
+
+### Estado do MVP
+
+- Interface local em português do Brasil, captura manual e MCP local somente leitura.
+- Capturas combinadas salvam um WAV de mix para o pipeline existente e WAVs mono sincronizados de microfone e áudio do sistema como masters locais.
+- A transcrição por API compatível com OpenAI Audio é opcional. Nenhuma chave vem configurada; o envio só ocorre após confirmação explícita por reunião.
+- Exportação manual para uma pasta escolhida, inclusive dentro do OneDrive. O app informa que copiou os arquivos e deixa o estado de sincronização do OneDrive como **não verificado**.
+- Esta branch ainda não tem uma versão publicada. Os ensaios de áudio em reuniões consentidas e a conferência do OneDrive precisam ocorrer antes de publicar um release.
+
+### Instalar esta branch no Windows
+
+Clone a branch de trabalho e execute o inicializador incluído no repositório. O bootstrap do upstream foi desativado para impedir que ele clone ou atualize silenciosamente o repositório original.
+
+```powershell
+git clone --branch codex/mvp-local-meeting https://github.com/solvit-consultoria/Meet2Notes.git Meet2Notes
+Set-Location Meet2Notes
+Set-ExecutionPolicy -Scope Process Bypass
+.\install.ps1 -AiBackend auto -Models none
+.\start.bat
+```
+
+Depois, abra `http://127.0.0.1:8765`. Esta instrução não baixa modelos grandes; instale e selecione o modelo de transcrição local em Configurações. O atualizador automático foi desativado neste fork. Faça atualizações só depois de revisar um release da Solvit.
+
+Consulte `AGENTS.md` e `DECISIONS.md` para os limites de privacidade e as decisões do fork. O restante deste README descreve capacidades herdadas do upstream `v0.6.1`; uma funcionalidade listada abaixo não significa que a Solvit a modificou, validou ou publicou.
+
+---
+
 <div align="center">
   <img src="src/local_meeting_ai/web/static/icons/mark.svg" alt="Meet2Notes logo" width="88">
   <h1>Meet2Notes</h1>
@@ -144,35 +174,23 @@ setup, tools, lifecycle, and security details.
 
 ## Easy installation
 
-### Windows: download and run one file
+### Windows: Solvit fork
 
-1. Download [`install-update.bat`](https://github.com/estebanstifli/Meet2Notes/raw/main/install-update.bat).
-2. Double-click the downloaded file.
-3. Wait for setup to finish, then open the new `Meet2Notes` folder and
-   double-click `start.bat`.
-4. Open `http://127.0.0.1:8765` in your browser.
+Clone the public Solvit branch and use its repository-scoped Python installer:
 
-The bootstrap installer checks for Git and Python 3.11 or newer, installs
-missing prerequisites for the current Windows user, clones Meet2Notes, and
-runs the normal isolated-environment installer. On an existing installation it
-delegates to the safe stable-Release updater. It does not install Python
-packages globally.
+```powershell
+git clone --branch codex/mvp-local-meeting https://github.com/solvit-consultoria/Meet2Notes.git Meet2Notes
+Set-Location Meet2Notes
+Set-ExecutionPolicy -Scope Process Bypass
+.\install.ps1 -AiBackend auto -Models none
+.\start.bat
+```
 
-The installation folder is deterministic: the installer creates a
-`Meet2Notes` folder beside the downloaded `.bat`. For example, a file saved as
-`C:\Users\Name\Downloads\install-update.bat` installs the application in
-`C:\Users\Name\Downloads\Meet2Notes`. Move the `.bat` to another writable
-folder before running it if you want the application installed elsewhere.
-Re-running the same file checks for a newer stable Release. `update.bat` can be
-run directly for the same purpose.
-
-> Windows may show a SmartScreen warning because this open-source batch file is
-> not code-signed. Review its contents before running it and download it only
-> from the official Meet2Notes repository or [meet2notes.eu](https://meet2notes.eu).
+Open `http://127.0.0.1:8765`. The model can be installed from Settings. The upstream `install-update.bat` and auto-updater are disabled in this fork; the `install-update.bat` file directs users to this source installation path.
 
 ### Pinokio: one-click local installation
 
-Meet2Notes can also be installed through [Pinokio](https://pinokio.computer),
+The **upstream project** can also be installed through [Pinokio](https://pinokio.computer),
 which keeps the application, Python runtime, FFmpeg, dependencies, and
 recommended local models in its isolated application environment.
 
@@ -586,19 +604,9 @@ Meet2Notes binds to `127.0.0.1` by default and is not exposed to the network
 unless the host setting is changed explicitly. A single-instance lock prevents
 accidentally starting two servers against the same data directory.
 
-### Safe stable updates
+### Updates in the Solvit fork
 
-Before starting the server, `start.bat` checks at most once every 24 hours for
-a newer stable GitHub Release. If one exists, the user can accept it or defer
-the notification. `update.bat` provides the same check manually.
-
-The updater never follows arbitrary commits from `main`. It accepts only
-`vX.Y.Z` tags from the official repository, requires a clean Git checkout and
-a stopped application, and creates a consistent SQLite backup before changing
-the source. Settings, meetings, recordings, summaries, RAG data, models, and
-custom storage locations are preserved. New settings parameters receive their
-new defaults without overwriting stored values. See [Safe updates](docs/updating.md)
-for the complete transaction and recovery model.
+Automatic and in-place updates are disabled in the fork. Review a Solvit release, back up the local data directory, and follow that release's migration instructions before updating. The preserved `update.ps1` still checks the upstream remote and will refuse to update this fork.
 
 ## Model installation and storage
 

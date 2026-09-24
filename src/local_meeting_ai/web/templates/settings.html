@@ -73,6 +73,32 @@
             </div>
             <label class="inline-setting port-setting"><span>Port</span><input id="http-port" type="number" min="1024" max="65535" step="1" inputmode="numeric"><small id="port-restart-note">Current address is loading…</small></label>
           </section>
+          <section class="general-card" aria-labelledby="mvp-export-title">
+            <div class="general-card-heading">
+              <span class="settings-icon engine-blue"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h16M5 7l2-4h10l2 4M6 7v13h12V7M9 11h6M9 15h6"/></svg></span>
+              <div><strong id="mvp-export-title">Arquivos das reuniões</strong><small>Escolha a pasta de exportação; o banco e as gravações em andamento continuam no armazenamento local do aplicativo.</small></div>
+            </div>
+            <div id="mvp-export-settings-form" class="mvp-settings-form">
+              <label class="field"><span>Pasta principal para exportações finalizadas</span><input id="mvp-export-root" maxlength="2048" placeholder="C:\\Users\\Você\\OneDrive\\Reuniões" autocomplete="off"></label>
+              <p class="engine-compatibility-note">O aplicativo confirma a cópia local. O estado da sincronização na nuvem do OneDrive permanece “não verificado”.</p>
+              <div class="settings-actions"><button class="button primary" type="button" id="mvp-save-export-root">Salvar pasta de exportação</button><span id="mvp-export-status" role="status" aria-live="polite"></span></div>
+            </div>
+          </section>
+          <section class="general-card" aria-labelledby="mvp-api-title">
+            <div class="general-card-heading">
+              <span class="settings-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="4" y="10" width="16" height="11" rx="2"/><path d="M8 10V7a4 4 0 0 1 8 0v3M12 14v3"/></svg></span>
+              <div><strong id="mvp-api-title">Transcrição por API (opcional)</strong><small>O áudio só será enviado depois de você revisar o provedor, a duração e os arquivos e confirmar cada envio.</small></div>
+            </div>
+            <div id="mvp-api-settings-form" class="mvp-settings-form">
+              <label class="field"><span>URL base do endpoint de áudio compatível</span><input id="mvp-audio-api-url" maxlength="2048" placeholder="https://provedor.example/v1" autocomplete="url"></label>
+              <label class="field"><span>Modelo de transcrição</span><input id="mvp-audio-api-model" maxlength="200" placeholder="modelo-asr"></label>
+              <div class="settings-actions"><button class="button secondary" type="button" id="mvp-save-api-settings">Salvar provedor</button><span id="mvp-api-status" role="status" aria-live="polite">Chave não configurada</span></div>
+            </div>
+            <div id="mvp-api-key-form" class="mvp-settings-form">
+              <label class="field"><span>Chave da API</span><input id="mvp-audio-api-key" type="password" maxlength="4096" autocomplete="new-password" placeholder="Deixe em branco para manter sem chave"></label>
+              <div class="settings-actions"><button class="button secondary" type="button" id="mvp-save-api-key">Guardar chave no Windows</button><button class="text-button" type="button" id="mvp-remove-api-key">Remover chave</button></div>
+            </div>
+          </section>
           <div class="settings-actions"><button class="button primary" type="submit">Save general settings</button></div>
         </form>
         <section class="general-card mcp-clients-card" aria-labelledby="mcp-clients-title">
@@ -895,4 +921,4 @@
   </div>
 </dialog>
 {% endblock %}
-{% block scripts %}<script src="/static/js/settings.js?v={{ asset_version }}" defer></script>{% endblock %}
+{% block scripts %}<script src="/static/js/settings.js?v={{ asset_version }}" defer></script><script src="/static/js/mvp.js?v={{ asset_version }}" defer></script>{% endblock %}

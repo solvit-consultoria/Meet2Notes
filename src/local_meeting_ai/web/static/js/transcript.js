@@ -671,13 +671,19 @@
       const speakerNumber = hasSpeaker ? speakerNumbers.get(rawSpeaker) : null;
       const speakerColor = hasSpeaker ? Math.abs(speakerNumber - 1) % 6 : null;
       const provisional = !segment.is_final;
+      const timestampQuality = segment.metadata?.timestamp_quality || "recorded";
+      const timestampAvailable = timestampQuality !== "unavailable";
+      const timestampDescription = timestampQuality === "approximate"
+        ? "Tempo aproximado"
+        : timestampQuality === "unavailable" ? "Sem marcação de tempo" : "Reproduzir a partir deste ponto";
       return `
         <article class="segment-row ${hasSpeaker ? `speaker-color-${speakerColor}` : "speaker-pending"} ${provisional ? "live-segment" : ""}" data-segment-id="${segment.id}">
-          <button class="timestamp-button" data-seek-ms="${segment.start_ms}" title="Play from ${formatTimestamp(segment.start_ms)}" aria-label="Play from ${formatTimestamp(segment.start_ms)}" aria-pressed="false">
+          <button class="timestamp-button" data-seek-ms="${segment.start_ms}" title="${timestampDescription}" aria-label="${timestampDescription}" aria-pressed="false" ${timestampAvailable ? "" : "disabled"}>
             <svg viewBox="0 0 24 24" aria-hidden="true"><path d="m8 5 11 7-11 7V5Z"/></svg>
           </button>
           <div class="segment-cue">
             <span class="segment-speaker"><i></i>${hasSpeaker ? escapeHTML(speakerNames.get(rawSpeaker) || t("speaker", { number: speakerNumber })) : "Speaker pending"}</span>
+            ${timestampQuality === "approximate" ? '<span class="engine-runtime-pill">Tempo aproximado</span>' : timestampQuality === "unavailable" ? '<span class="engine-runtime-pill">Sem marcação de tempo</span>' : ""}
             ${provisional ? '<span class="live-segment-badge"><i></i> Live</span>' : ""}
           </div>
           <textarea class="segment-editor" rows="1" aria-label="Transcript segment ${segment.segment_index + 1}" ${provisional ? "readonly" : ""}>${escapeHTML(segment.text)}</textarea>

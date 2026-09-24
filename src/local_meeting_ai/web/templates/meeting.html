@@ -2,10 +2,10 @@
 {% block title %}{{ meeting.title }} · Meet2Notes{% endblock %}
 {% block content %}
 <div class="page meeting-page" data-meeting-id="{{ meeting.id }}">
-  <nav class="breadcrumb" aria-label="Breadcrumb">
-    <a href="/">Meetings</a>
+  <nav class="breadcrumb" aria-label="Caminho de navegação">
+    <a href="/">Reuniões</a>
     <svg viewBox="0 0 24 24" aria-hidden="true"><path d="m9 18 6-6-6-6"/></svg>
-    <span>Meeting overview</span>
+    <span>Visão geral da reunião</span>
   </nav>
 
   <header class="meeting-header">
@@ -17,31 +17,34 @@
           <span id="meeting-date">{{ meeting.created_at }}</span>
         </div>
         <h1 id="meeting-title-display">{{ meeting.title }}</h1>
-        <p id="meeting-description-display">{{ meeting.description or "No description yet." }}</p>
+        <p id="meeting-description-display">{{ meeting.description or "Sem descrição." }}</p>
       </div>
     </div>
     <div class="header-actions">
       <button class="button secondary" id="edit-meeting">
         <svg viewBox="0 0 24 24" aria-hidden="true"><path d="m4 16-.5 4.5L8 20l11-11-4-4L4 16Z"/><path d="m13 7 4 4"/></svg>
-        Edit details
+        Editar detalhes
       </button>
+      <button class="button secondary" id="mvp-export-meeting" type="button">Exportar reunião</button>
+      <button class="button secondary" id="mvp-transcribe-api" type="button">Transcrever por API</button>
       <button class="button primary" data-open-import>
         <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 16V4m0 0L7 9m5-5 5 5M5 14v5h14v-5"/></svg>
-        Add media
+        Adicionar mídia
       </button>
-      <button class="icon-button danger-menu" id="delete-meeting" aria-label="Permanently delete meeting">
+      <button class="icon-button danger-menu" id="delete-meeting" aria-label="Excluir reunião permanentemente">
         <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h16M9 7V4h6v3m-9 0 1 13h10l1-13M10 11v5M14 11v5"/></svg>
       </button>
     </div>
   </header>
+  <p id="mvp-meeting-export-status" class="engine-compatibility-note" role="status" aria-live="polite" hidden></p>
 
-  <nav class="tab-bar" aria-label="Meeting sections">
-    <a class="active" href="/meetings/{{ meeting.id }}">Overview</a>
-    <a href="/meetings/{{ meeting.id }}/transcript">Transcript</a>
-    <button data-coming-soon="Speakers">Speakers <span>Soon</span></button>
-    <button data-coming-soon="Summary">Summary <span>Soon</span></button>
+  <nav class="tab-bar" aria-label="Seções da reunião">
+    <a class="active" href="/meetings/{{ meeting.id }}">Visão geral</a>
+    <a href="/meetings/{{ meeting.id }}/transcript">Transcrição</a>
+    <button data-coming-soon="Falantes">Falantes <span>Em breve</span></button>
+    <button data-coming-soon="Resumo">Resumo <span>Em breve</span></button>
     <a href="/prompt?meeting={{ meeting.id }}" target="_blank" rel="noopener">Prompt</a>
-    <button data-coming-soon="Exports">Exports <span>Soon</span></button>
+    <button data-coming-soon="Exportações">Exportações <span>Em breve</span></button>
   </nav>
 
   <div class="meeting-layout">
@@ -49,10 +52,10 @@
       <article class="panel recording-panel">
         <div class="section-heading">
           <div>
-            <span class="eyebrow">Source media</span>
-            <h2>Recordings</h2>
+            <span class="eyebrow">Mídia de origem</span>
+            <h2>Gravações</h2>
           </div>
-          <button class="text-button" data-open-import>Add another</button>
+          <button class="text-button" data-open-import>Adicionar outra</button>
         </div>
         <div id="recording-list" class="recording-list">
           <div class="skeleton-row"></div>
@@ -66,11 +69,11 @@
           </div>
         </div>
         <div>
-          <span class="eyebrow">Local transcription</span>
-          <h2>Turn this recording into an editable transcript</h2>
-          <p>Choose a CPU or CUDA profile. Model downloads always require your explicit approval.</p>
+          <span class="eyebrow">Transcrição local</span>
+          <h2>Transforme esta gravação em uma transcrição editável</h2>
+          <p>Escolha um perfil de CPU ou CUDA. O download de modelos sempre exige sua aprovação.</p>
         </div>
-        <a class="button secondary" href="/meetings/{{ meeting.id }}/transcript">Open transcript</a>
+        <a class="button secondary" href="/meetings/{{ meeting.id }}/transcript">Abrir transcrição</a>
       </article>
     </section>
 
@@ -78,24 +81,26 @@
       <article class="panel details-panel">
         <div class="section-heading">
           <div>
-            <span class="eyebrow">At a glance</span>
-            <h2>Details</h2>
+            <span class="eyebrow">Resumo rápido</span>
+            <h2>Detalhes</h2>
           </div>
         </div>
         <dl class="detail-list">
           <div><dt>Status</dt><dd id="detail-status">{{ meeting.status.value }}</dd></div>
-          <div><dt>Duration</dt><dd id="detail-duration">—</dd></div>
-          <div><dt>Language</dt><dd>{{ meeting.language or "Automatic" }}</dd></div>
-          <div><dt>Storage</dt><dd><span class="local-pill"><i></i> Local</span></dd></div>
-          <div><dt>Created</dt><dd id="detail-created">{{ meeting.created_at }}</dd></div>
+          <div><dt>Duração</dt><dd id="detail-duration">—</dd></div>
+          <div><dt>Idioma</dt><dd>{{ meeting.language or "Automático" }}</dd></div>
+          <div><dt>Cliente</dt><dd id="meeting-client-name">{{ meeting.client_name }}</dd></div>
+          <div><dt>Projeto</dt><dd id="meeting-project-name">{{ meeting.project_name }}</dd></div>
+          <div><dt>Armazenamento</dt><dd><span class="local-pill"><i></i> Local</span></dd></div>
+          <div><dt>Criada em</dt><dd id="detail-created">{{ meeting.created_at }}</dd></div>
         </dl>
       </article>
 
       <article class="panel meeting-jobs-panel">
         <div class="section-heading">
           <div>
-            <span class="eyebrow">Processing</span>
-            <h2>Job history</h2>
+            <span class="eyebrow">Processamento</span>
+            <h2>Histórico de tarefas</h2>
           </div>
         </div>
         <div id="meeting-job-list" class="job-list compact"></div>
@@ -107,16 +112,18 @@
 <dialog class="modal compact-modal" id="edit-dialog">
   <form class="modal-panel" id="edit-form">
     <div class="modal-header">
-      <div><span class="eyebrow">Meeting details</span><h2>Keep it recognizable</h2></div>
-      <button type="button" class="icon-button close-button" data-close-edit aria-label="Close">
+      <div><span class="eyebrow">Detalhes da reunião</span><h2>Identifique esta reunião</h2></div>
+      <button type="button" class="icon-button close-button" data-close-edit aria-label="Fechar">
         <svg viewBox="0 0 24 24" aria-hidden="true"><path d="m6 6 12 12M18 6 6 18"/></svg>
       </button>
     </div>
-    <label class="field"><span>Title</span><input id="edit-title" maxlength="200" required></label>
-    <label class="field"><span>Description</span><textarea id="edit-description" rows="4" maxlength="4000"></textarea></label>
+    <label class="field"><span>Título</span><input id="edit-title" maxlength="200" required></label>
+    <label class="field"><span>Descrição</span><textarea id="edit-description" rows="4" maxlength="4000"></textarea></label>
+    <label class="field"><span>Cliente</span><input id="edit-client-name" maxlength="120" value="{{ meeting.client_name }}" placeholder="A classificar"></label>
+    <label class="field"><span>Projeto</span><input id="edit-project-name" maxlength="120" value="{{ meeting.project_name }}" placeholder="A classificar"></label>
     <div class="modal-actions">
-      <button type="button" class="button secondary" data-close-edit>Cancel</button>
-      <button type="submit" class="button primary">Save changes</button>
+      <button type="button" class="button secondary" data-close-edit>Cancelar</button>
+      <button type="submit" class="button primary">Salvar alterações</button>
     </div>
   </form>
 </dialog>
@@ -126,15 +133,15 @@
     <div class="danger-symbol">
       <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3 2.5 20h19L12 3Z"/><path d="M12 9v5M12 17.5v.5"/></svg>
     </div>
-    <h2>Delete this meeting permanently?</h2>
-    <p>The meeting, imported recordings, jobs, and its private storage folder will be removed. This cannot be undone.</p>
+    <h2>Excluir esta reunião permanentemente?</h2>
+    <p>A reunião, as gravações importadas, as tarefas e a pasta privada serão removidas. Esta ação não pode ser desfeita.</p>
     <label class="field">
-      <span>Type <strong>DELETE</strong> to confirm</span>
-      <input id="delete-confirmation" autocomplete="off" placeholder="DELETE">
+      <span>Digite <strong>EXCLUIR</strong> para confirmar</span>
+      <input id="delete-confirmation" autocomplete="off" placeholder="EXCLUIR">
     </label>
     <div class="modal-actions">
-      <button type="button" class="button secondary" data-close-delete>Keep meeting</button>
-      <button type="submit" class="button danger" id="delete-confirm-button" disabled>Delete permanently</button>
+      <button type="button" class="button secondary" data-close-delete>Manter reunião</button>
+      <button type="submit" class="button danger" id="delete-confirm-button" disabled>Excluir permanentemente</button>
     </div>
   </form>
 </dialog>

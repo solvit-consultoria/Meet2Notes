@@ -22,15 +22,7 @@ echo The exact local address will be shown below when the server is ready.
 echo Press Ctrl+C in this window to stop Meet2Notes.
 echo.
 
-if /I not "%M2N_SKIP_UPDATE_CHECK%"=="1" (
-    "%MEET2NOTES_PYTHON%" -m local_meeting_ai.updater check --interactive -- %*
-    set "MEET2NOTES_UPDATE_CHECK_CODE=!ERRORLEVEL!"
-    if "!MEET2NOTES_UPDATE_CHECK_CODE!"=="10" (
-        echo Starting the safe updater in a separate window...
-        start "Meet2Notes Update" cmd.exe /c ""%CD%\update.bat" --prepared --restart"
-        exit /b 0
-    )
-)
+echo Automatic updates are disabled in the Solvit fork. Review fork releases manually.
 
 "%MEET2NOTES_PYTHON%" -m local_meeting_ai --no-browser %*
 set "MEET2NOTES_EXIT_CODE=%ERRORLEVEL%"
