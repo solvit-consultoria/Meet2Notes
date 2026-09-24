@@ -30,6 +30,8 @@ This file separates verified `v0.6.1` behavior from intended fork changes.
 - Manual meeting notes use the existing meeting description field, are saved through the local API, and render above the transcript in exported Markdown. This does not generate an AI summary.
 - The local Faster Whisper adapter checks the CUDA math runtime on Windows before selecting a GPU automatically. On this workstation `cublas64_12.dll` was absent, so the application is configured for CPU, `small`, `int8`, and Portuguese. A missing CUDA runtime must not leave the live capture in a stopping state.
 - The app uses the existing Solvit site logo as its visible mark and favicon. The asset is copied into the fork for offline rendering; retain Solvit ownership and do not present it as an upstream Meet2Notes asset.
+- The optional Windows tray helper is PowerShell/Windows Forms, not a native installer. Its Startup shortcut launches the local server at sign-in without recording or opening a browser; double click opens the app window. The tray menu can request a graceful server shutdown, and the Startup shortcut can be removed separately.
+- The lean MVP installation must include both FFmpeg and FFprobe. A live test exposed that missing media tools let a direct Faster Whisper call succeed while the integrated import/transcription pipeline failed. Install through the existing WinGet path and honor the refreshed user PATH when launching from a long-lived desktop process.
 
 ## Validation required for new behavior
 

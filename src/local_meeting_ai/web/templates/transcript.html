@@ -299,7 +299,7 @@
     aria-label="Resize activity log"
     aria-orientation="horizontal"
     aria-controls="activity-log-card"
-    aria-valuemin="44"
+    aria-valuemin="96"
     aria-valuemax="420"
     aria-valuenow="180"
     title="Drag to resize the activity log"
@@ -312,6 +312,7 @@
         <p>Engine loading, configuration changes, transcription progress and errors.</p>
       </div>
       <button type="button" class="text-button" id="clear-activity-log">Clear view</button>
+      <button type="button" class="text-button activity-log-toggle" id="toggle-activity-log" aria-controls="activity-log-output" aria-expanded="true" data-i18n="activity.hide">Hide log</button>
     </header>
     <textarea
       id="activity-log-output"

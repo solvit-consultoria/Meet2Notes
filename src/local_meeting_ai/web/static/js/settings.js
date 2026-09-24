@@ -1145,7 +1145,7 @@
 
   function renderSystem(info, capabilities) {
     const address = $("#port-restart-note");
-    if (address) address.textContent = `Current address: ${info.listen_address}. Save, then restart Meet2Notes to apply a new port.`;
+    if (address) address.textContent = t("settings.port_restart", { address: info.listen_address });
     $("#data-directory").textContent = info.data_directory;
     const storageDataDirectory = $("#storage-data-directory");
     if (storageDataDirectory) storageDataDirectory.textContent = info.data_directory;
@@ -1153,21 +1153,21 @@
 
     const ffmpeg = capabilities.ffmpeg;
     $("#ffmpeg-capability").innerHTML = ffmpeg.available
-      ? '<span class="status-badge status-ready">Available</span>'
-      : '<span class="status-badge status-failed">Not found</span>';
+      ? `<span class="status-badge status-ready">${t("settings.available")}</span>`
+      : `<span class="status-badge status-failed">${t("settings.not_found")}</span>`;
 
     const capture = capabilities.audio_capture;
     const captureLabel = capture.available
-      ? `${capture.native_api || capture.backend} · ${capture.source_count || 0} sources`
-      : "Optional install";
+      ? t("settings.capture_sources", { api: capture.native_api || capture.backend, count: capture.source_count || 0 })
+      : t("settings.optional_install");
     $("#capture-capability").innerHTML = capture.available
       ? `<span class="status-badge status-ready">${captureLabel}</span>`
       : `<span class="neutral-pill">${captureLabel}</span>`;
 
     $("#transcription-capability").innerHTML =
       capabilities.features.transcription === "available"
-        ? `<span class="status-badge status-ready">${capabilities.transcription.cuda_available ? "CUDA ready" : "CPU ready"}</span>`
-        : '<span class="neutral-pill">Optional install</span>';
+        ? `<span class="status-badge status-ready">${t(capabilities.transcription.cuda_available ? "settings.cuda_ready" : "settings.cpu_ready")}</span>`
+        : `<span class="neutral-pill">${t("settings.optional_install")}</span>`;
   }
 
   function renderPlugins(catalog) {

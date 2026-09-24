@@ -22,6 +22,7 @@
   const manualNotesStatus = document.querySelector("#manual-notes-status");
   const activityOutput = document.querySelector("#activity-log-output");
   const activityResizer = document.querySelector("#activity-log-resizer");
+  const activityLogToggle = document.querySelector("#toggle-activity-log");
   const transcriptionWorkspace = document.querySelector("#transcription-workspace");
   const postprocessDialog = document.querySelector("#postprocess-dialog");
   const postprocessLogOutput = document.querySelector("#postprocess-log");
@@ -138,11 +139,11 @@
   }
 
   function setActivityLogHeight(requestedHeight) {
-    const minimum = 44;
+    const minimum = 96;
     const mobile = window.matchMedia("(max-width: 600px)").matches;
     const maximum = mobile
-      ? Math.min(220, Math.max(150, transcriptionWorkspace.clientHeight - 420))
-      : Math.max(180, transcriptionWorkspace.clientHeight - 320);
+      ? Math.min(220, Math.max(112, transcriptionWorkspace.clientHeight - 420))
+      : Math.max(112, transcriptionWorkspace.clientHeight - 360);
     const height = Math.round(Math.min(maximum, Math.max(minimum, requestedHeight)));
     transcriptionWorkspace.style.setProperty("--activity-log-height", `${height}px`);
     activityResizer.setAttribute("aria-valuenow", String(height));
@@ -155,14 +156,32 @@
   }
 
   function bindActivityLog() {
-    let storedHeight = window.matchMedia("(max-width: 600px)").matches ? 150 : 180;
+    let storedHeight = window.matchMedia("(max-width: 600px)").matches ? 112 : 128;
+    let isCollapsed = false;
     try {
       storedHeight = Number(window.localStorage.getItem("meet2notes-activity-log-height"))
         || storedHeight;
+      isCollapsed = window.localStorage.getItem("meet2notes-activity-log-collapsed") === "true";
     } catch (_error) {
       // Keep the friendly default height.
     }
     setActivityLogHeight(storedHeight);
+    const updateCollapsedState = (collapsed) => {
+      transcriptionWorkspace.classList.toggle("activity-log-collapsed", collapsed);
+      activityLogToggle.setAttribute("aria-expanded", String(!collapsed));
+      activityLogToggle.dataset.i18n = collapsed ? "activity.show" : "activity.hide";
+      activityLogToggle.textContent = t(activityLogToggle.dataset.i18n);
+      try {
+        window.localStorage.setItem("meet2notes-activity-log-collapsed", String(collapsed));
+      } catch (_error) {
+        // Collapsing remains available when browser storage is disabled.
+      }
+    };
+    updateCollapsedState(isCollapsed);
+    activityLogToggle.addEventListener("click", () => {
+      isCollapsed = !transcriptionWorkspace.classList.contains("activity-log-collapsed");
+      updateCollapsedState(isCollapsed);
+    });
 
     activityResizer.addEventListener("pointerdown", (event) => {
       event.preventDefault();
@@ -189,7 +208,7 @@
       event.preventDefault();
       const current = Number(activityResizer.getAttribute("aria-valuenow"));
       const maximum = Number(activityResizer.getAttribute("aria-valuemax"));
-      if (event.key === "Home") return setActivityLogHeight(44);
+      if (event.key === "Home") return setActivityLogHeight(96);
       if (event.key === "End") return setActivityLogHeight(maximum);
       setActivityLogHeight(current + (event.key === "ArrowUp" ? 24 : -24));
     });
@@ -499,6 +518,10 @@
     renderSourceMode();
   }
 
+  function displaySourceName(source) {
+    return source.name.replace(/ · System audio$/, ` · ${t("capture.system_suffix")}`);
+  }
+
   function renderSourceMode() {
     rememberSelectedDevices();
     const mode = selectedSourceMode();
@@ -532,11 +555,11 @@
         || (!selectedDevices[kind] && (available.find((source) => source.is_default) || available[0]));
       if (selected) selectedDevices[kind] = selected.id;
       const options = candidates.map((source) => `
-        <label class="native-source-option" title="${escapeHTML(source.name)}">
+        <label class="native-source-option" title="${escapeHTML(displaySourceName(source))}">
           <input type="radio" name="native-source-${kind}" data-native-source="${kind}" value="${escapeHTML(source.id)}"
             ${selected?.id === source.id ? "checked" : ""} ${source.available === false ? "disabled" : ""}>
           <span>
-            <strong>${escapeHTML(source.name)}</strong>
+            <strong>${escapeHTML(displaySourceName(source))}</strong>
             <small>${source.available === false ? escapeHTML(source.unavailable_reason || t("capture.unavailable"))
               : source.is_default ? t("capture.default_device") : t("capture.available_device")}</small>
           </span>
@@ -1996,7 +2019,7 @@
     strip.classList.toggle("paused", paused);
     strip.classList.toggle("transcription-error", Boolean(session.capture_error) || session.realtime_status === "error");
     const sources = session.sources?.length ? session.sources : [session.source];
-    document.querySelector("#live-source-name").textContent = sources.map((source) => source.name).join(" + ");
+    document.querySelector("#live-source-name").textContent = sources.map(displaySourceName).join(" + ");
     document.querySelector("#live-capture-state").textContent =
       session.capture_error || (paused ? "Capture paused" : session.realtime_message || "Transcribing locally");
     document.querySelector("#capture-elapsed").textContent = formatTimestamp(session.elapsed_ms);

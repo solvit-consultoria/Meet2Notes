@@ -66,7 +66,15 @@ function Get-BootstrapPython {
 }
 
 function Install-Ffmpeg {
-    if (Get-Command ffmpeg -ErrorAction SilentlyContinue) {
+    foreach ($Candidate in ([Environment]::GetEnvironmentVariable('Path', 'User') -split ';')) {
+        if ($Candidate -and (Test-Path -LiteralPath (Join-Path $Candidate 'ffmpeg.exe')) -and
+            (Test-Path -LiteralPath (Join-Path $Candidate 'ffprobe.exe'))) {
+            $env:PATH = "$Candidate;$env:PATH"
+            break
+        }
+    }
+    if ((Get-Command ffmpeg -ErrorAction SilentlyContinue) -and
+        (Get-Command ffprobe -ErrorAction SilentlyContinue)) {
         Write-Host "FFmpeg is already available."
         return
     }
@@ -85,6 +93,14 @@ function Install-Ffmpeg {
         --accept-package-agreements --accept-source-agreements
     if ($LASTEXITCODE -ne 0) {
         Write-Warning "FFmpeg installation did not complete. Meet2Notes itself is installed."
+    } else {
+        foreach ($Candidate in ([Environment]::GetEnvironmentVariable('Path', 'User') -split ';')) {
+            if ($Candidate -and (Test-Path -LiteralPath (Join-Path $Candidate 'ffmpeg.exe')) -and
+                (Test-Path -LiteralPath (Join-Path $Candidate 'ffprobe.exe'))) {
+                $env:PATH = "$Candidate;$env:PATH"
+                break
+            }
+        }
     }
 }
 
@@ -117,6 +133,7 @@ if ([int]$VersionParts[0] -lt 3 -or (
 
 if ($Mvp) {
     Write-Step "Installing the lean meeting MVP"
+    Install-Ffmpeg
     Invoke-Checked $EnvironmentPython @(
         "-m", "pip", "install", "-e", ".[capture,transcription]"
     )

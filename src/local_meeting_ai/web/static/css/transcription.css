@@ -58,7 +58,7 @@
 }
 
 .transcription-workspace {
-  --activity-log-height: 180px;
+  --activity-log-height: 128px;
   display: grid;
   min-height: 0;
   flex: 1;
@@ -129,16 +129,17 @@
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 18px;
-  padding: 11px 15px 9px;
+  gap: 14px;
+  padding: 9px 15px;
   border-bottom: 1px solid #e5eaf1;
 }
 
 .activity-log-header > div {
   display: grid;
-  grid-template-columns: auto auto 1fr;
+  grid-template-columns: auto auto minmax(0, 1fr);
   align-items: baseline;
   gap: 7px 10px;
+  min-width: 0;
 }
 
 .activity-log-header h2 {
@@ -150,7 +151,9 @@
 .activity-log-header p {
   margin: 0;
   color: #8490a3;
-  font-size: 8px;
+  font-size: 11px;
+  line-height: 1.4;
+  overflow-wrap: anywhere;
 }
 
 .activity-live-indicator {
@@ -158,7 +161,7 @@
   align-items: center;
   gap: 5px;
   color: #079455;
-  font-size: 7px;
+  font-size: 9px;
   font-weight: 800;
   letter-spacing: .05em;
   text-transform: uppercase;
@@ -182,12 +185,18 @@
   border: 0;
   outline: 0;
   font-family: "Cascadia Mono", Consolas, "SFMono-Regular", monospace;
-  font-size: 9px;
+  font-size: 10px;
   line-height: 1.55;
   resize: none;
   overflow-wrap: anywhere;
   white-space: pre-wrap;
 }
+
+.activity-log-toggle { flex: 0 0 auto; min-height: 32px; padding-inline: 9px; }
+.transcription-workspace.activity-log-collapsed { grid-template-rows: minmax(300px, 1fr) 0 44px; }
+.transcription-workspace.activity-log-collapsed .workspace-resizer { visibility: hidden; }
+.transcription-workspace.activity-log-collapsed .activity-log-output { display: none; }
+.transcription-workspace.activity-log-collapsed .activity-log-header { min-height: 44px; border-bottom: 0; }
 
 .transcription-canvas-header {
   display: flex;
@@ -2549,8 +2558,8 @@
 
 @media (max-width: 820px) {
   .minimal-transcript-page {
-    height: calc(100vh - 58px);
-    min-height: 680px;
+    height: calc(100dvh - 58px);
+    min-height: 0;
     padding: 18px;
   }
 
@@ -2577,8 +2586,10 @@
   }
 
   .transcription-workspace {
-    grid-template-rows: minmax(390px, 1fr) 13px var(--activity-log-height);
+    grid-template-rows: minmax(180px, 1fr) 13px var(--activity-log-height);
   }
+
+  .transcription-workspace.activity-log-collapsed { grid-template-rows: minmax(180px, 1fr) 0 44px; }
 
   .activity-log-header > div {
     grid-template-columns: auto 1fr;
@@ -2587,6 +2598,9 @@
   .activity-log-header p {
     display: none;
   }
+
+  .activity-log-header { gap: 8px; padding-inline: 10px; }
+  .activity-log-toggle { min-width: 44px; }
 
   .transcription-canvas-header {
     align-items: stretch;
