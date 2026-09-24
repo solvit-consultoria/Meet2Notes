@@ -1,13 +1,13 @@
 {
   "about.description": "Transcrição privada e inteligência de reuniões no seu próprio computador.",
   "about.local": "Software que prioriza o uso local",
-  "brand.subtitle": "Espaço de trabalho para reuniões privadas",
+  "brand.subtitle": "by Solvit",
   "common.cancel": "Cancelar",
   "common.close": "Fechar",
   "common.installed": "instalado",
   "common.optional": "opcional",
   "common.soon": "Em breve",
-  "document.title": "Meet2Notes",
+  "document.title": "Meeting by Solvit",
   "engine.checking": "Verificando…",
   "engine.in_memory": "Na memória",
   "engine.install": "Instalação opcional necessária",
@@ -23,7 +23,7 @@
   "engine.shutdown_confirm": "Desligar",
   "engine.shutdown_description": "O trabalho local ativo será interrompido, os modelos carregados serão liberados da RAM e VRAM e o servidor Python será fechado.",
   "engine.shutdown_requested": "Meet2Notes está sendo encerrado com segurança…",
-  "engine.shutdown_title": "Encerrar o Meet2Notes?",
+  "engine.shutdown_title": "Desligar o Meeting?",
   "engine.state.disabled": "Desativado",
   "engine.state.error": "Erro",
   "engine.state.idle": "Inativo",
@@ -1353,7 +1353,12 @@
     "Caminho de navegação": "Caminho de navegação",
     "Histórico de tarefas": "Histórico de tarefas",
     "Visão geral da reunião": "Visão geral da reunião",
-    "Fechar": "Fechar"
+    "Fechar": "Fechar",
+    "Meeting": "Meeting",
+    "by Solvit": "by Solvit",
+    "Meeting by Solvit": "Meeting by Solvit",
+    "Página inicial do Meeting by Solvit": "Página inicial do Meeting by Solvit",
+    "Desligar o Meeting?": "Desligar o Meeting?"
   },
   "meetings.saved_count": {
     "one": "reunião salva",
@@ -1465,5 +1470,6 @@
   "capture.available_device": "Entrada disponível",
   "capture.help_windows": "Windows: selecione os fones de ouvido ou alto-falantes usados no Teams, Meet ou outro aplicativo de chamadas. Use fones de ouvido para evitar que a voz dos outros participantes seja gravada duas vezes pelo microfone.",
   "capture.help_macos": "macOS: o áudio do sistema requer uma entrada virtual como BlackHole. Na configuração de áudio MIDI, crie um dispositivo de saída múltipla com seus fones de ouvido e BlackHole, use-o como saída de chamada e selecione BlackHole aqui. Permita o acesso ao microfone do Meet2Notes ou do terminal que o executa.",
-  "capture.help_linux": "Linux: selecione o monitor de saída da sua chamada. Se estiver faltando, exponha um monitor PulseAudio/PipeWire como uma entrada de áudio e atualize os dispositivos. Use fones de ouvido para evitar eco."
+  "capture.help_linux": "Linux: selecione o monitor de saída da sua chamada. Se estiver faltando, exponha um monitor PulseAudio/PipeWire como uma entrada de áudio e atualize os dispositivos. Use fones de ouvido para evitar eco.",
+  "brand.home": "Página inicial do Meeting by Solvit"
 }

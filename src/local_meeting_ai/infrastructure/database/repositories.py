@@ -705,15 +705,17 @@ class TranscriptionRepository:
                 SELECT title FROM transcriptions
                 WHERE title = 'New Transcription'
                    OR title GLOB 'New Transcription [0-9]*'
+                   OR title = 'Nova transcrição'
+                   OR title GLOB 'Nova transcrição [0-9]*'
                 """
             ).fetchall()
         existing = {str(row["title"]) for row in rows}
-        if "New Transcription" not in existing:
-            return "New Transcription"
+        if "Nova transcrição" not in existing:
+            return "Nova transcrição"
         suffix = 2
-        while f"New Transcription {suffix}" in existing:
+        while f"Nova transcrição {suffix}" in existing:
             suffix += 1
-        return f"New Transcription {suffix}"
+        return f"Nova transcrição {suffix}"
 
     def update_title(self, transcription_id: int, title: str) -> Transcription | None:
         with self.database.transaction() as connection:

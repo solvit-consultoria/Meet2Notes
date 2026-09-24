@@ -1,0 +1,189 @@
+/* Meeting by Solvit: editorial palette and offline typography from the Solvit site. */
+@font-face {
+  font-family: "Solvit Inter";
+  src: url("/static/fonts/inter-latin.woff2") format("woff2");
+  font-style: normal;
+  font-weight: 400 700;
+  font-display: swap;
+}
+@font-face {
+  font-family: "Solvit Inter";
+  src: url("/static/fonts/inter-latin-ext.woff2") format("woff2");
+  font-style: normal;
+  font-weight: 400 700;
+  font-display: swap;
+  unicode-range: U+0100-024F, U+1E00-1EFF;
+}
+@font-face {
+  font-family: "Solvit Spectral";
+  src: url("/static/fonts/spectral-bold-latin.woff2") format("woff2");
+  font-style: normal;
+  font-weight: 700;
+  font-display: swap;
+}
+@font-face {
+  font-family: "Solvit Spectral";
+  src: url("/static/fonts/spectral-bold-latin-ext.woff2") format("woff2");
+  font-style: normal;
+  font-weight: 700;
+  font-display: swap;
+  unicode-range: U+0100-024F, U+1E00-1EFF;
+}
+@font-face {
+  font-family: "Solvit Spectral";
+  src: url("/static/fonts/spectral-bold-italic-latin.woff2") format("woff2");
+  font-style: italic;
+  font-weight: 700;
+  font-display: swap;
+}
+@font-face {
+  font-family: "Solvit Spectral";
+  src: url("/static/fonts/spectral-bold-italic-latin-ext.woff2") format("woff2");
+  font-style: italic;
+  font-weight: 700;
+  font-display: swap;
+  unicode-range: U+0100-024F, U+1E00-1EFF;
+}
+
+:root {
+  --ink: #4b302d;
+  --ink-soft: #6d5650;
+  --ink-faint: #947c73;
+  --paper: #faf5ef;
+  --panel: #fffaf6;
+  --line: #e9dad0;
+  --line-strong: #d8bdad;
+  --forest: #c96022;
+  --forest-2: #a84f1d;
+  --green: #c96022;
+  --green-pale: #f8e8da;
+  --blue: #c96022;
+  --blue-pale: #f8e8da;
+  --lime: #fff2e7;
+  --lime-strong: #f6dfcd;
+  --shadow-sm: 0 1px 2px rgba(99, 49, 45, .035);
+  --shadow-lg: 0 22px 65px rgba(99, 49, 45, .13);
+  --radius: 10px;
+  --radius-sm: 7px;
+}
+
+body,
+button,
+input,
+textarea,
+select {
+  font-family: "Solvit Inter", "Segoe UI", sans-serif;
+}
+
+.main-content {
+  background-color: var(--paper);
+  background-image: linear-gradient(rgba(99, 49, 45, .035) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(99, 49, 45, .035) 1px, transparent 1px);
+  background-size: 80px 80px;
+}
+
+:is(.workspace-heading, .simple-page-header, .settings-section-header, .meeting-title-block) h1,
+.empty-transcript h2,
+.brand strong {
+  font-family: "Solvit Spectral", Georgia, serif;
+  font-weight: 700;
+  letter-spacing: -.025em;
+}
+
+:is(.workspace-heading, .simple-page-header, .settings-section-header, .meeting-title-block) h1 {
+  color: #63312d;
+}
+
+.sidebar,
+.mobile-header {
+  background: #fffaf6;
+  border-color: var(--line);
+}
+.brand { border-color: var(--line); }
+.brand strong { color: #63312d; font-size: 21px; }
+.brand small { color: #a84f1d; font-size: 10px; font-weight: 650; letter-spacing: .08em; }
+.brand .brand-mark { border-radius: 12px; }
+.mobile-brand strong { color: #63312d; font-family: "Solvit Spectral", Georgia, serif; }
+
+.primary-nav a,
+.primary-nav .nav-button { color: #614a44; }
+.primary-nav a:hover,
+.primary-nav .nav-button:hover { color: #a84f1d; background: #f8e9dd; border-color: #efcfb9; }
+.primary-nav a.active { color: #63312d; background: #f8e9dd; border-color: #edc8ae; }
+.primary-nav .sidebar-new-meeting,
+.primary-nav .sidebar-new-meeting:hover,
+.button.primary {
+  color: #fffaf6;
+  background: #c96022;
+  border-color: #c96022;
+  box-shadow: 0 6px 16px rgba(201, 96, 34, .16);
+}
+.primary-nav .sidebar-new-meeting:hover,
+.button.primary:hover { background: #a84f1d; border-color: #a84f1d; }
+
+.theme-toggle,
+.engine-card-settings-link { border-color: var(--line); color: #63312d; }
+.theme-toggle:hover,
+.engine-card-settings-link:hover { color: #a84f1d; background: #f9ebe0; border-color: #edc8ae; }
+.theme-toggle:focus-visible,
+:is(button, a, input, textarea, select):focus-visible { outline-color: #c96022; }
+.transcription-workspace,
+.panel,
+.engine-card,
+.activity-log-card { border-color: var(--line); }
+.engine-card { background: #fff8f2; }
+.workspace-icon {
+  background: #63312d;
+  box-shadow: 0 8px 18px rgba(99, 49, 45, .16);
+}
+.minimal-empty-icon {
+  color: #a84f1d;
+  background: #f8e8da;
+  border-color: #edc8ae;
+}
+.minimal-settings-link:hover {
+  color: #a84f1d;
+  background: #f9ebe0;
+  border-color: #edc8ae;
+}
+
+[data-theme="dark"] {
+  --ink: #f7e9de;
+  --ink-soft: #ddc9bc;
+  --ink-faint: #ae9285;
+  --paper: #241b1a;
+  --panel: #352523;
+  --line: #59413c;
+  --line-strong: #745249;
+  --forest: #e88b54;
+  --forest-2: #f1a678;
+  --lime: #4c302a;
+  --lime-strong: #614036;
+  --green-pale: #3b2a26;
+  --blue-pale: #3b2a26;
+}
+[data-theme="dark"] .main-content {
+  background-color: var(--paper);
+  background-image: linear-gradient(rgba(255, 244, 234, .025) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(255, 244, 234, .025) 1px, transparent 1px);
+}
+[data-theme="dark"] .sidebar,
+[data-theme="dark"] .mobile-header { color: var(--ink-soft); background: #2b201e; border-color: var(--line); }
+[data-theme="dark"] .brand,
+[data-theme="dark"] .transcription-workspace,
+[data-theme="dark"] .panel,
+[data-theme="dark"] .engine-card { border-color: var(--line); }
+[data-theme="dark"] .brand strong,
+[data-theme="dark"] .mobile-brand strong,
+[data-theme="dark"] :is(.workspace-heading, .simple-page-header, .settings-section-header, .meeting-title-block) h1 { color: #f7e9de; }
+[data-theme="dark"] .brand small { color: #e99a6b; }
+[data-theme="dark"] .workspace-icon { background: #a84f1d; }
+[data-theme="dark"] .minimal-empty-icon { color: #e99a6b; background: #4c302a; border-color: #745249; }
+[data-theme="dark"] .primary-nav a.active { color: #f7e9de; background: #58382d; border-color: #7c4a38; }
+[data-theme="dark"] .primary-nav .sidebar-new-meeting,
+[data-theme="dark"] .button.primary { color: #fffaf6; background: #b95c28; border-color: #b95c28; }
+
+@media (max-width: 760px) {
+  .brand strong { font-size: 18px; }
+  .main-content { background-size: 64px 64px; }
+}

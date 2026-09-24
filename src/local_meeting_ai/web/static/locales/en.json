@@ -1,13 +1,13 @@
 {
   "about.description": "Private transcription and meeting intelligence on your own computer.",
   "about.local": "Local-first software",
-  "brand.subtitle": "Private meeting workspace",
+  "brand.subtitle": "by Solvit",
   "common.cancel": "Cancel",
   "common.close": "Close",
   "common.installed": "installed",
   "common.optional": "optional",
   "common.soon": "Soon",
-  "document.title": "Meet2Notes",
+  "document.title": "Meeting by Solvit",
   "engine.checking": "Checking…",
   "engine.in_memory": "In memory",
   "engine.install": "Optional install required",
@@ -23,7 +23,7 @@
   "engine.shutdown_confirm": "Shut down",
   "engine.shutdown_description": "Active local work will stop, the loaded models will be released from RAM and VRAM, and the Python server will close.",
   "engine.shutdown_requested": "Meet2Notes is shutting down safely…",
-  "engine.shutdown_title": "Shut down Meet2Notes?",
+  "engine.shutdown_title": "Shut down Meeting?",
   "engine.state.disabled": "Disabled",
   "engine.state.error": "Error",
   "engine.state.idle": "Idle",
@@ -1353,7 +1353,12 @@
     "Caminho de navegação": "Caminho de navegação",
     "Histórico de tarefas": "Histórico de tarefas",
     "Visão geral da reunião": "Visão geral da reunião",
-    "Fechar": "Fechar"
+    "Fechar": "Fechar",
+    "Meeting": "Meeting",
+    "by Solvit": "by Solvit",
+    "Meeting by Solvit": "Meeting by Solvit",
+    "Página inicial do Meeting by Solvit": "Página inicial do Meeting by Solvit",
+    "Desligar o Meeting?": "Desligar o Meeting?"
   },
   "meetings.saved_count": {
     "one": "saved meeting",
@@ -1465,5 +1470,6 @@
   "capture.available_device": "Available input",
   "capture.help_windows": "Windows: select the headphones or speakers used by Teams, Meet or your call app. Use headphones to avoid recording the other participants twice through your microphone.",
   "capture.help_macos": "macOS: system audio requires a virtual input such as BlackHole. In Audio MIDI Setup, create a Multi-Output Device with your headphones and BlackHole, use it as the call output, then select BlackHole here. Allow microphone access for Meet2Notes or the terminal that runs it.",
-  "capture.help_linux": "Linux: select the monitor of your call output. If it is missing, expose a PulseAudio/PipeWire monitor as an audio input, then refresh the devices. Use headphones to avoid echo."
+  "capture.help_linux": "Linux: select the monitor of your call output. If it is missing, expose a PulseAudio/PipeWire monitor as an audio input, then refresh the devices. Use headphones to avoid echo.",
+  "brand.home": "Meeting by Solvit home"
 }

@@ -20,6 +20,7 @@ param(
     [string]$ModelsDirectory = "",
 
     [switch]$SkipFfmpeg,
+    [switch]$Mvp,
     [switch]$Dev,
     [switch]$Start
 )
@@ -112,6 +113,27 @@ if ([int]$VersionParts[0] -lt 3 -or (
     [int]$VersionParts[0] -eq 3 -and [int]$VersionParts[1] -lt 11
 )) {
     throw "Meet2Notes requires Python 3.11 or newer."
+}
+
+if ($Mvp) {
+    Write-Step "Installing the lean meeting MVP"
+    Invoke-Checked $EnvironmentPython @(
+        "-m", "pip", "install", "-e", ".[capture,transcription]"
+    )
+    if ($Dev) {
+        Invoke-Checked $EnvironmentPython @("-m", "pip", "install", "-e", ".[dev]")
+    }
+    Write-Step "Verifying the meeting MVP installation"
+    Invoke-Checked $EnvironmentPython @("-m", "pip", "check")
+    Invoke-Checked $EnvironmentPython @("scripts/check_environment.py")
+    Write-Host ""
+    Write-Host "Meeting MVP installed. No AI model was downloaded." -ForegroundColor Green
+    Write-Host "Open the local interface with: .\start.bat"
+    Write-Host "Install a transcription model explicitly in the interface before transcribing."
+    if ($Start) {
+        & (Join-Path $EnvironmentRoot "Scripts\meet2notes.exe")
+    }
+    return
 }
 
 Write-Step "Installing Meet2Notes and native audio/AI runtimes"

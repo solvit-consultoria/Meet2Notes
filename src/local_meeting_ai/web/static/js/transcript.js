@@ -42,7 +42,7 @@
   const liveAssistantWidgetStorageKey = "meet2notes.liveAssistantWidget.v3";
 
   let meetingId = page.dataset.meetingId || null;
-  let draftTitle = page.dataset.defaultTitle || "New Transcription";
+  let draftTitle = page.dataset.defaultTitle || "Nova transcrição";
   let audioSources = [];
   let captureCapability = {};
   let recordings = [];
@@ -334,9 +334,9 @@
   }
 
   function setTitle(value) {
-    draftTitle = value || page.dataset.defaultTitle || "New Transcription";
+    draftTitle = value || page.dataset.defaultTitle || "Nova transcrição";
     titleDisplay.textContent = draftTitle;
-    titleDisplay.title = `Click to rename “${draftTitle}”`;
+    titleDisplay.title = `Clique para renomear “${draftTitle}”`;
   }
 
   function beginRename() {

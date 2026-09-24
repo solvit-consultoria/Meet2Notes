@@ -44,7 +44,7 @@
     const badge = document.querySelector(".meeting-kicker .status-badge");
     badge.className = `status-badge status-${item.status}`;
     badge.textContent = item.status;
-    document.title = `${item.title} · Meet2Notes`;
+    document.title = `${item.title} · Meeting by Solvit`;
   }
 
   function renderRecordings(items) {

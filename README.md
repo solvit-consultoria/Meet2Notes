@@ -1,3 +1,7 @@
+# Meeting by Solvit
+
+Um espaço local para registrar e transcrever reuniões. A identidade visual segue o [site da Solvit](https://solvitconsultoria.com.br/): tons de vinho e laranja, fundo claro, tipografia Spectral e Inter. Este é o nome do produto; o repositório e o pacote Python continuam com os nomes herdados para manter o histórico e as integrações existentes. Veja [identidade visual](docs/brand-solvit.md).
+
 ## Fork MVP da Solvit Consultoria
 
 Este fork público parte da tag MIT [`v0.6.1`](https://github.com/estebanstifli/Meet2Notes/tree/v0.6.1) do [Meet2Notes original](https://github.com/estebanstifli/Meet2Notes). O remoto original permanece como `upstream`; este repositório é o `origin` da personalização.
@@ -18,11 +22,11 @@ Clone a branch de trabalho e execute o inicializador incluído no repositório. 
 git clone --branch codex/mvp-local-meeting https://github.com/solvit-consultoria/Meet2Notes.git Meet2Notes
 Set-Location Meet2Notes
 Set-ExecutionPolicy -Scope Process Bypass
-.\install.ps1 -AiBackend auto -Models none
+.\install.ps1 -Mvp
 .\start.bat
 ```
 
-Depois, abra `http://127.0.0.1:8765`. Esta instrução não baixa modelos grandes; instale e selecione o modelo de transcrição local em Configurações. O atualizador automático foi desativado neste fork. Faça atualizações só depois de revisar um release da Solvit.
+Depois, abra `http://127.0.0.1:8765`. O perfil `-Mvp` instala apenas a captura no Windows e o Faster Whisper para transcrição local. Ele não baixa modelos, PyTorch, diarização nem o gerador de resumos. Para instalar o modelo local `small`, execute `.\.venv\Scripts\python.exe -m local_meeting_ai.model_setup --models whisper --whisper-model small` e selecione-o em Configurações. Escolha pastas fora do OneDrive em **Configurações → Geral → Dados da reunião / Modelos de IA** para o banco, as gravações em andamento e os modelos. Defina a pasta do OneDrive apenas em **Arquivos das reuniões** para exportações finalizadas. O atualizador automático foi desativado neste fork. Faça atualizações só depois de revisar um release da Solvit.
 
 Consulte `AGENTS.md` e `DECISIONS.md` para os limites de privacidade e as decisões do fork. O restante deste README descreve capacidades herdadas do upstream `v0.6.1`; uma funcionalidade listada abaixo não significa que a Solvit a modificou, validou ou publicou.
 

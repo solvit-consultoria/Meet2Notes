@@ -210,13 +210,13 @@ def test_transcription_pipeline_editor_and_versions(tmp_path: Path) -> None:
         detail = client.get(f"/api/transcriptions/{transcription_id}")
         assert detail.status_code == 200
         assert detail.json()["transcription"]["is_active"] is True
-        assert detail.json()["transcription"]["title"] == "New Transcription"
+        assert detail.json()["transcription"]["title"] == "Nova transcrição"
         assert [segment["text"] for segment in detail.json()["segments"]] == [
             "Welcome to the product review.",
             "We approved the product launch.",
         ]
         assert all(segment["is_final"] for segment in detail.json()["segments"])
-        assert 'data-default-title="New Transcription 2"' in client.get("/").text
+        assert 'data-default-title="Nova transcrição 2"' in client.get("/").text
 
         renamed = client.patch(
             f"/api/transcriptions/{transcription_id}",
@@ -227,7 +227,7 @@ def test_transcription_pipeline_editor_and_versions(tmp_path: Path) -> None:
         assert client.get(f"/api/meetings/{meeting['id']}").json()["title"] == (
             "Product launch decision"
         )
-        assert 'data-default-title="New Transcription"' in client.get("/").text
+        assert 'data-default-title="Nova transcrição"' in client.get("/").text
 
         first_segment = detail.json()["segments"][0]
         edited = client.patch(

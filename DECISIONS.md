@@ -19,6 +19,13 @@ This file separates verified `v0.6.1` behavior from intended fork changes.
 - UX: Portuguese local browser interface, manual start/stop, and at most a non-starting suggestion that requires an explicit click. No custom native installer in this delivery.
 - Release: preserve upstream attribution and updater safety; adapt or disable fork-incompatible update flow so it cannot overwrite fork work. Publish only after acceptance checks pass.
 
+## Product identity and local installation
+
+- Product name: **Meeting by Solvit**. Keep the repository, Python package, data paths, and upstream attribution named Meet2Notes until a separate migration is justified.
+- Visual identity follows the Solvit site: wine `#63312d`, burnt orange `#c96022`, warm ivory `#faf5ef`, Spectral headings and Inter controls. Fonts are bundled for offline use under the OFL.
+- The Windows `install.ps1 -Mvp` profile installs capture and Faster Whisper without Torch or summary engines. Downloading a transcription model is a separate explicit step. The application still uses the existing local browser UI and launcher.
+- On this workstation, the active database, meeting storage, and Whisper model were moved to Windows local app storage outside OneDrive because the checkout lives under OneDrive. Windows may display the app package's `LocalCache` path for these folders. The export destination remains unset until the user chooses its parent folder.
+
 ## Validation required for new behavior
 
 - Test audio channel synchronization, mix derivation, and continued capture/recovery after transcription or network failure.

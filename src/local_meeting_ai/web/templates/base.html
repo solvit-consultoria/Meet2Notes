@@ -4,23 +4,24 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="color-scheme" content="light dark">
-  <meta name="theme-color" content="#ffffff">
-  <title>{% block title %}Meet2Notes{% endblock %}</title>
-  <link rel="icon" href="/static/icons/mark.svg" type="image/svg+xml">
+  <meta name="theme-color" content="#faf5ef">
+  <title>{% block title %}Meeting by Solvit{% endblock %}</title>
+  <link rel="icon" href="/static/icons/meeting-solvit.svg" type="image/svg+xml">
   <script src="/static/js/theme-bootstrap.js?v={{ asset_version }}"></script>
   <link rel="stylesheet" href="/static/css/app.css?v={{ asset_version }}">
   <link rel="stylesheet" href="/static/css/ui-refresh.css?v={{ asset_version }}">
   {% block head %}{% endblock %}
   <link rel="stylesheet" href="/static/css/themes.css?v={{ asset_version }}">
+  <link rel="stylesheet" href="/static/css/brand-solvit.css?v={{ asset_version }}">
 </head>
 <body data-page="{{ page }}">
   <div class="app-shell">
     <aside class="sidebar" id="sidebar">
-      <a class="brand" id="sidebar-brand" href="/" aria-label="Meet2Notes home" data-i18n-aria-label="brand.home">
-        <img class="brand-mark" src="/static/icons/mark.svg" alt="">
+      <a class="brand" id="sidebar-brand" href="/" aria-label="Página inicial do Meeting by Solvit" data-i18n-aria-label="brand.home">
+        <img class="brand-mark" src="/static/icons/meeting-solvit.svg" alt="">
         <span>
-          <strong>Meet2Notes</strong>
-          <small data-i18n="brand.subtitle">Private meeting workspace</small>
+          <strong>Meeting</strong>
+          <small data-i18n="brand.subtitle">by Solvit</small>
         </span>
       </a>
       <button class="sidebar-collapse-toggle" id="sidebar-collapse-toggle" type="button" aria-label="Minimize sidebar" aria-expanded="true" title="Minimize sidebar" data-i18n-aria-label="nav.minimize_sidebar" data-i18n-title="nav.minimize_sidebar">
@@ -77,8 +78,8 @@
 
     <div class="mobile-header">
       <a class="mobile-brand" href="/">
-        <img src="/static/icons/mark.svg" alt="">
-        <strong>Meet2Notes</strong>
+        <img src="/static/icons/meeting-solvit.svg" alt="">
+        <strong>Meeting</strong>
       </a>
       <button class="icon-button" id="menu-toggle" aria-label="Open navigation" aria-expanded="false" data-i18n-aria-label="nav.open">
         <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h16M4 12h16M4 17h16"/></svg>
@@ -136,8 +137,8 @@
     <form method="dialog" class="modal-panel">
       <div class="modal-header">
         <div>
-          <span class="eyebrow">Meet2Notes</span>
-          <h2 id="shutdown-title" data-i18n="engine.shutdown_title">Shut down Meet2Notes?</h2>
+          <span class="eyebrow">Meeting by Solvit</span>
+          <h2 id="shutdown-title" data-i18n="engine.shutdown_title">Desligar o Meeting?</h2>
           <p data-i18n="engine.shutdown_description">Active local work will stop, the loaded models will be released from RAM and VRAM, and the Python server will close.</p>
         </div>
       </div>

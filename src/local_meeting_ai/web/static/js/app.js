@@ -309,7 +309,7 @@
         collapseToggle.setAttribute("aria-label", collapseToggle.title);
       }
       if (brand) {
-        brand.title = collapsedOnDesktop ? "Expand sidebar" : "Meet2Notes home";
+        brand.title = collapsedOnDesktop ? "Expand sidebar" : "Meeting by Solvit home";
         brand.setAttribute("aria-label", brand.title);
       }
     };
