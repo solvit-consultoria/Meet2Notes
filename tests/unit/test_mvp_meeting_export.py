@@ -1,12 +1,8 @@
 from __future__ import annotations
 
-import hashlib
-import json
 import wave
 from dataclasses import replace
 from pathlib import Path
-
-import pytest
 
 from local_meeting_ai.domain.entities import (
     Meeting,
@@ -55,7 +51,7 @@ def _recording(meeting: Meeting, role: str, audio_path: Path, recording_id: int)
     )
 
 
-def test_export_is_repeatable_and_has_hashes_and_separate_tracks(tmp_path: Path) -> None:
+def test_export_is_repeatable_as_one_markdown_with_summary_first(tmp_path: Path) -> None:
     meeting = replace(_meeting(), description="Decisão: enviar a proposta na sexta-feira.")
     local = tmp_path / "private" / meeting.uuid
     local.mkdir(parents=True)
@@ -97,11 +93,23 @@ def test_export_is_repeatable_and_has_hashes_and_separate_tracks(tmp_path: Path)
             start_ms=0,
             end_ms=0,
             text="Bom dia, começando a reunião.",
-            speaker_id=None,
+            speaker_id=1,
             confidence=None,
             is_final=True,
-            metadata={"timestamp_quality": "unavailable"},
-        )
+            metadata={"timestamp_quality": "recorded"},
+        ),
+        TranscriptSegment(
+            id=2,
+            transcription_id=3,
+            segment_index=1,
+            start_ms=500,
+            end_ms=900,
+            text="Esta fala entra no mesmo parágrafo.",
+            speaker_id=1,
+            confidence=None,
+            is_final=True,
+            metadata={"timestamp_quality": "recorded"},
+        ),
     ]
 
     first = export_meeting_bundle(
@@ -110,6 +118,8 @@ def test_export_is_repeatable_and_has_hashes_and_separate_tracks(tmp_path: Path)
         transcription=transcription,
         segments=segments,
         export_root=root,
+        summary_markdown="## Decisão\n\nEnviar a proposta.",
+        speaker_names={1: "Rafa"},
     )
     second = export_meeting_bundle(
         meeting=meeting,
@@ -117,29 +127,28 @@ def test_export_is_repeatable_and_has_hashes_and_separate_tracks(tmp_path: Path)
         transcription=transcription,
         segments=segments,
         export_root=root,
+        summary_markdown="## Decisão\n\nEnviar a proposta.",
+        speaker_names={1: "Rafa"},
     )
     destination = Path(first["path"])
     assert first == second
-    assert first["audio_files"] == 3
-    assert sorted(path.name for path in (destination / "audio").iterdir()) == [
-        "master-microphone-2.wav",
-        "master-system-3.wav",
-        "original-1.wav",
-    ]
-    manifest = json.loads((destination / "integrity.json").read_text(encoding="utf-8"))
-    for name, digest in manifest["files"].items():
-        assert hashlib.sha256((destination / name).read_bytes()).hexdigest() == digest
+    assert first["files"] == 1
+    assert first["audio_files"] == 0
+    assert first["local_audio_state"] == "preserved_in_app_storage"
+    assert [path.name for path in destination.iterdir()] == ["meeting.md"]
+    assert all(path.is_file() for path in audio_paths)
     markdown = (destination / "meeting.md").read_text(encoding="utf-8")
+    assert markdown.index("## Resumo") < markdown.index("## Transcrição")
     assert markdown.index("## Anotações") < markdown.index("## Transcrição")
     assert "Decisão: enviar a proposta" in markdown
-    assert "A transcrição inicial usa o mix" in markdown
-    assert "`00:00:00.000`" not in markdown
-    metadata = json.loads((destination / "metadata.json").read_text(encoding="utf-8"))
-    assert metadata["meeting"]["client"] == "A classificar"
-    assert metadata["onedrive_sync_state"] == "not_verified"
+    assert "Enviar a proposta." in markdown
+    assert "**Rafa**" in markdown
+    assert "Esta fala entra no mesmo parágrafo." in markdown
+    assert "- `" not in markdown
+    assert "`00:00:00.000`" in markdown
 
 
-def test_live_capture_export_fails_when_a_master_is_missing(tmp_path: Path) -> None:
+def test_markdown_export_does_not_copy_audio_masters(tmp_path: Path) -> None:
     meeting = _meeting()
     original = tmp_path / "mix.wav"
     with wave.open(str(original), "wb") as audio:
@@ -150,17 +159,19 @@ def test_live_capture_export_fails_when_a_master_is_missing(tmp_path: Path) -> N
     recording = _recording(meeting, "original", original, 1)
     recording.metadata["capture_source_id"] = "mic-device"
 
-    with pytest.raises(ValueError, match="master_microphone, master_system"):
-        export_meeting_bundle(
-            meeting=meeting,
-            recordings=[recording],
-            transcription=None,
-            segments=[],
-            export_root=tmp_path / "OneDrive",
-        )
+    result = export_meeting_bundle(
+        meeting=meeting,
+        recordings=[recording],
+        transcription=None,
+        segments=[],
+        export_root=tmp_path / "OneDrive",
+    )
+    assert Path(result["file"]).is_file()
+    assert Path(recording.local_path).is_file()
+    assert result["audio_files"] == 0
 
 
-def test_export_preserves_multiple_recordings_with_same_role(tmp_path: Path) -> None:
+def test_export_keeps_multiple_local_recordings_out_of_markdown_folder(tmp_path: Path) -> None:
     meeting = _meeting()
     recordings = []
     for recording_id in (1, 2):
@@ -179,7 +190,5 @@ def test_export_preserves_multiple_recordings_with_same_role(tmp_path: Path) -> 
         segments=[],
         export_root=tmp_path / "OneDrive",
     )
-    audio_files = sorted(path.name for path in (Path(result["path"]) / "audio").iterdir())
-    assert audio_files == ["original-1.wav", "original-2.wav"]
-    metadata = json.loads((Path(result["path"]) / "metadata.json").read_text(encoding="utf-8"))
-    assert [item["recording_id"] for item in metadata["audio"]] == [1, 2]
+    assert sorted(path.name for path in Path(result["path"]).iterdir()) == ["meeting.md"]
+    assert all(Path(recording.local_path).is_file() for recording in recordings)

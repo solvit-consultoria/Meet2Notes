@@ -14,10 +14,11 @@ This file separates verified `v0.6.1` behavior from intended fork changes.
 - Repository: public `solvit-consultoria/Meet2Notes` fork, based on `v0.6.1`; retain the original Git remote as `upstream`.
 - Capture: preserve microphone and system audio as separate local masters, synchronized; create a derived mix for transcription. Real-time transcription is an explicit per-session opt-in and defaults off to reduce inference load and improve the final transcript path. In offline mode, drain transient capture frames without ASR or an in-memory audio buffer; run final transcription after stop. A mix does not justify assigning speaker labels such as “Você” and “Outro lado”. Keep capture running through transcription/network failures.
 - Memory: new Faster Whisper installations do not preload models or keep them resident after a job. Existing saved settings are preserved; the two controls remain independently configurable in Settings.
-- Storage/export: retain active database and in-progress audio locally. Export finalized Markdown, metadata, segments, integrity manifest, and both audio tracks to a user-selected parent folder, including OneDrive if selected. Show local persistence and destination synchronization as distinct states. Organize by client/project with an “A classificar” choice and stable meeting ID.
+- Storage/export: retain active database, source audio, and in-progress sessions in local app storage. Export one Markdown file to a user-selected folder, including OneDrive if selected. Put meeting metadata in frontmatter, then summary and manual notes, followed by the complete transcript grouped into paragraphs with speaker and timestamp. Keep audio masters local for reprocessing; do not copy them or per-segment JSON into the export folder by default. Show local persistence and destination synchronization as distinct states. Organize by client/project with an “A classificar” choice and stable meeting ID.
 - Transcription: local is the default. A configurable OpenAI Audio-compatible endpoint is optional; API is currently left unconfigured. Each upload requires a separate user confirmation after showing provider, estimated duration, and files. Never auto-upload or silently fall back; mark missing timestamps as approximate or unavailable.
 - MCP: reuse a local `stdio`, read-only surface only. No remote MCP/tunnel, write operation, or ChatGPT web/Notion AI connection in this MVP.
 - UX: Portuguese local browser interface, manual start/stop, and at most a non-starting suggestion that requires an explicit click. No custom native installer in this delivery.
+- UX performance: open completed meetings on the summary tab. Fetch the full transcript only when its tab is requested; display a lightweight speaker-attributed paragraph view with search and incremental loading, without per-segment audio players/edit controls or a speaker-turn audio list.
 - Release: preserve upstream attribution and updater safety; adapt or disable fork-incompatible update flow so it cannot overwrite fork work. Publish only after acceptance checks pass.
 
 ## Product identity and local installation
@@ -37,7 +38,7 @@ This file separates verified `v0.6.1` behavior from intended fork changes.
 ## Validation required for new behavior
 
 - Test audio channel synchronization, mix derivation, and continued capture/recovery after transcription or network failure.
-- Test repeated export without duplicates, integrity manifest, local/export state reporting, and client/project assignment.
+- Test repeatable single-Markdown export, summary-first order, speaker-paragraph grouping, timestamps, local-audio preservation, and client/project assignment.
 - Test API adapter with simulated responses, explicit confirmation boundary, absent credentials, timestamp handling, and no credential leakage in logs.
 - Test MCP listing/search/transcript retrieval and verify no write-capable tools are exposed.
 - Run the fork's applicable existing checks. Real Portuguese meeting trials require consent and are not implied by these repository decisions.

@@ -129,7 +129,7 @@
     const button = event.currentTarget;
     button.disabled = true;
     exportStatus.hidden = false;
-    exportStatus.textContent = "Exportando Markdown, metadados, segmentos e áudios…";
+    exportStatus.textContent = "Exportando o resumo e a transcrição em um arquivo Markdown…";
     try {
       const result = await api(`/api/mvp/meetings/${meetingId}/export`, {
         method: "POST",
@@ -138,7 +138,7 @@
           project_name: meeting.project_name || "A classificar",
         }),
       });
-      exportStatus.textContent = `Cópia local concluída: ${result.path}. Sincronização do OneDrive: não verificada.`;
+      exportStatus.textContent = `Arquivo Markdown salvo: ${result.file || result.path}. Áudio original preservado no armazenamento local do aplicativo. Sincronização do OneDrive: não verificada.`;
       toast("Reunião exportada.");
     } catch (error) {
       exportStatus.textContent = error.message;

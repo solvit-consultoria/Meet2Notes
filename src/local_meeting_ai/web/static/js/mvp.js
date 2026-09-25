@@ -19,8 +19,8 @@
         ? "Chave guardada no Windows"
         : "Chave não configurada";
       exportStatus.textContent = settings.export_root
-        ? "Pasta de exportação configurada. A sincronização do OneDrive será indicada como não verificada."
-        : "Escolha a pasta principal de exportação para ativar a cópia de reuniões finalizadas.";
+        ? "Pasta configurada para exportar um Markdown por reunião. A sincronização do OneDrive não é verificada pelo aplicativo."
+        : "Escolha onde salvar o Markdown de cada reunião finalizada.";
     } catch (error) {
       exportStatus.textContent = error.message;
     }
@@ -35,7 +35,7 @@
         body: JSON.stringify({ export_root: exportRoot.value.trim() }),
       });
       exportRoot.value = settings.export_root;
-      exportStatus.textContent = "Pasta local configurada. A sincronização do OneDrive será indicada separadamente como não verificada.";
+      exportStatus.textContent = "Pasta configurada para salvar um Markdown por reunião. O áudio original permanece no armazenamento local do aplicativo.";
       toast("Pasta de exportação salva.");
     } catch (error) {
       exportStatus.textContent = error.message;

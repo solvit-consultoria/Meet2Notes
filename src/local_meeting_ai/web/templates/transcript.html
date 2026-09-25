@@ -89,19 +89,19 @@
     <nav class="meeting-tabs hidden" id="meeting-tabs" role="tablist" aria-label="Meeting workspace">
       <button type="button" class="active" role="tab" aria-selected="true" aria-controls="meeting-tab-transcript" data-meeting-tab="transcript">
         <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 3h9l4 4v14H6zM15 3v5h5M9 12h7M9 16h7"/></svg>
-        Transcription
+        Transcrição
       </button>
       <button type="button" role="tab" aria-selected="false" aria-controls="meeting-tab-speakers" data-meeting-tab="speakers">
         <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M16 20v-2a4 4 0 0 0-4-4H7a4 4 0 0 0-4 4v2M9.5 10a4 4 0 1 0 0-8 4 4 0 0 0 0 8ZM17 11l2 2 3-4"/></svg>
-        Speakers
+        Falantes
       </button>
       <button type="button" role="tab" aria-selected="false" aria-controls="meeting-tab-intelligence" data-meeting-tab="intelligence">
         <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3 9.8 8.8 4 11l5.8 2.2L12 19l2.2-5.8L20 11l-5.8-2.2L12 3ZM5 3v4M3 5h4"/></svg>
-        AI notes
+        Resumo
       </button>
       <button type="button" role="tab" aria-selected="false" aria-controls="meeting-tab-utilities" data-meeting-tab="utilities">
         <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 4v11m0 0 4-4m-4 4-4-4M5 20h14M5 4h3M16 4h3"/></svg>
-        Utilities
+        Ferramentas
       </button>
     </nav>
 
@@ -146,18 +146,6 @@
       <header><div><span class="eyebrow">Remote live agent</span><strong>Meeting insights</strong></div><span id="live-agent-insight-count"></span></header>
       <div id="live-agent-insight-list"></div>
     </section>
-
-    <div class="canvas-audio-row hidden" id="audio-row">
-      <span class="canvas-audio-icon">
-        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3a3 3 0 0 0-3 3v6a3 3 0 0 0 6 0V6a3 3 0 0 0-3-3Z"/><path d="M5 11v1a7 7 0 0 0 14 0v-1M12 19v3M8 22h8"/></svg>
-      </span>
-      <div class="canvas-audio-copy">
-        <strong id="audio-filename">Recording</strong>
-        <span>Original audio · stored locally</span>
-      </div>
-      <audio id="meeting-audio" controls preload="metadata"></audio>
-      <span class="save-indicator" id="editor-save-state"><i></i> Saved</span>
-    </div>
 
     <div class="job-progress-card hidden" id="transcription-progress">
       <span class="pulse-orbit"><i></i></span>
@@ -225,7 +213,7 @@
 
     <section class="meeting-tab-panel" id="meeting-tab-intelligence" role="tabpanel" data-meeting-panel="intelligence" hidden>
       <header class="result-panel-header compact-result-panel-header">
-        <h2>Meeting intelligence</h2>
+        <h2>Resumo da reunião</h2>
         <div class="ai-result-controls">
           <span class="result-status" id="ai-result-status">Waiting</span>
           <div class="ai-result-actions" aria-label="AI note actions">
@@ -270,19 +258,7 @@
         <section class="utility-card utility-card-transcript" aria-labelledby="utility-transcript-title">
           <header><span class="utility-card-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7 3h7l4 4v14H7zM14 3v5h5M10 12h5M10 16h5"/></svg></span><div><h3 id="utility-transcript-title">Transcription</h3><p>Editable conversation</p></div></header>
           <div class="utility-actions">
-            <button type="button" data-export-source="transcript" data-export-format="markdown"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 5h16v14H4zM8 15V9l4 4 4-4v6"/></svg>Export Markdown</button>
-            <button type="button" data-export-source="transcript" data-export-format="word"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7 3h7l4 4v14H7zM14 3v5h5M9 12l1 5 2-3 2 3 1-5"/></svg>Export Word</button>
-            <button type="button" data-export-source="transcript" data-export-format="pdf"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7 3h7l4 4v14H7zM14 3v5h5M9 16h6M9 12h4"/></svg>Export PDF</button>
-            <button type="button" data-export-source="transcript" data-export-format="clipboard"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="8" y="8" width="11" height="12" rx="2"/><path d="M16 8V6a2 2 0 0 0-2-2H6a2 2 0 0 0-2 2v10a2 2 0 0 0 2 2h2"/></svg>Copy to Clipboard</button>
-          </div>
-        </section>
-        <section class="utility-card utility-card-notes" aria-labelledby="utility-notes-title">
-          <header><span class="utility-card-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3 9.8 8.8 4 11l5.8 2.2L12 19l2.2-5.8L20 11l-5.8-2.2L12 3Z"/></svg></span><div><h3 id="utility-notes-title">AI notes</h3><p>Meeting insights</p></div></header>
-          <div class="utility-actions">
-            <button type="button" data-export-source="notes" data-export-format="markdown"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 5h16v14H4zM8 15V9l4 4 4-4v6"/></svg>Export Markdown</button>
-            <button type="button" data-export-source="notes" data-export-format="word"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7 3h7l4 4v14H7zM14 3v5h5M9 12l1 5 2-3 2 3 1-5"/></svg>Export Word</button>
-            <button type="button" data-export-source="notes" data-export-format="pdf"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7 3h7l4 4v14H7zM14 3v5h5M9 16h6M9 12h4"/></svg>Export PDF</button>
-            <button type="button" data-export-source="notes" data-export-format="clipboard"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="8" y="8" width="11" height="12" rx="2"/><path d="M16 8V6a2 2 0 0 0-2-2H6a2 2 0 0 0-2 2v10a2 2 0 0 0 2 2h2"/></svg>Copy to Clipboard</button>
+            <button type="button" data-export-source="transcript" data-export-format="markdown"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 5h16v14H4zM8 15V9l4 4 4-4v6"/></svg>Exportar reunião em Markdown</button>
           </div>
         </section>
         <section class="utility-card utility-card-other" aria-labelledby="utility-other-title">

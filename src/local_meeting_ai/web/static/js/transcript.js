@@ -12,7 +12,6 @@
   } = window.Meet2Notes;
 
   const page = document.querySelector(".minimal-transcript-page");
-  const audio = document.querySelector("#meeting-audio");
   const segmentContainer = document.querySelector("#transcript-segments");
   const startDialog = document.querySelector("#transcription-dialog");
   const titleDisplay = document.querySelector("#transcription-title-display");
@@ -66,6 +65,7 @@
   let preferences = {};
   let manualNotesTimer = null;
   let activeTranscriptionId = null;
+  let transcriptDetailLoaded = false;
   let transcriptVisibleLimit = 100;
   let activeJob = null;
   let captureSession = null;
@@ -103,10 +103,6 @@
   let workflowDismissed = false;
   let workflowCompleted = false;
   let startActionAvailable = newMeetingRequested;
-  let audioStopAtSeconds = null;
-  let speakerPlaybackRanges = [];
-  let speakerPlaybackIndex = -1;
-  let activeAudioPlaybackButton = null;
   let activeSpeakerSummaryJobId = null;
   let activeSpeakerSummaryId = null;
   let speakerSummaryDismissed = false;
@@ -413,20 +409,26 @@
       renderProgress(activeJob);
       restorePostprocessing(jobs);
 
+      const captureBelongsToPage = Boolean(
+        currentCapture
+        && (!meetingId || String(currentCapture.meeting_id) === String(meetingId)),
+      );
       const preferred = versions.find((item) => item.is_active)
         || versions.find((item) => ["running", "queued"].includes(item.status))
         || versions[0];
+      setActiveMeetingTab(
+        preferred && preferred.status === "completed" && !captureBelongsToPage
+          ? "intelligence"
+          : "transcript",
+      );
       if (preferred) {
+        document.querySelector("#meeting-tabs").classList.remove("hidden");
         await selectTranscription(preferred.id);
       } else {
         setTitle(draftTitle);
         renderEmpty();
       }
 
-      const captureBelongsToPage = Boolean(
-        currentCapture
-        && (!meetingId || String(currentCapture.meeting_id) === String(meetingId)),
-      );
       if (captureBelongsToPage) {
         meetingId = String(currentCapture.meeting_id);
         page.dataset.meetingId = meetingId;
@@ -556,19 +558,6 @@
   }
 
   function configureAudio() {
-    const original = recordings.find((item) => item.role === "original");
-    const row = document.querySelector("#audio-row");
-    if (!original) {
-      row.classList.add("hidden");
-      stopAudioPlayback();
-      audio.removeAttribute("src");
-      applyAudioAvailability();
-      return;
-    }
-    row.classList.remove("hidden");
-    document.querySelector("#audio-filename").textContent =
-      original.original_filename || "Original recording";
-    audio.src = `/api/recordings/${original.id}/media`;
     applyAudioAvailability();
   }
 
@@ -594,7 +583,7 @@
         : '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h16M9 7V4h6v3M7 7l1 13h8l1-13M10 11v5M14 11v5"/></svg>Delete audio';
     }
     document.querySelectorAll(
-      "[data-audio-export], .timestamp-button, .speaker-fragment-play, [data-play-speaker], [data-remember-speaker], #speaker-rebuild-identification",
+      "[data-audio-export], [data-remember-speaker], #speaker-rebuild-identification",
     ).forEach((control) => {
       control.disabled = unavailable;
       if (deleted) control.title = "Audio deleted from this meeting";
@@ -933,10 +922,25 @@
     void sample();
   }
 
-  async function selectTranscription(transcriptionId) {
+  async function selectTranscription(transcriptionId, { forceLoad = false } = {}) {
     activeTranscriptionId = Number(transcriptionId);
+    const version = versions.find((item) => Number(item.id) === activeTranscriptionId);
+    const transcriptVisible = document.querySelector("#meeting-tab-transcript").classList.contains("active");
+    const speakersVisible = document.querySelector("#meeting-tab-speakers").classList.contains("active");
+    if (!forceLoad && !transcriptVisible && !speakersVisible && version) {
+      transcriptDetailLoaded = false;
+      lastDetail = { transcription: version, segments: [], speakers: [], speaker_turns: [] };
+      setTitle(version.title);
+      renderSummaryPanel();
+      return;
+    }
+    if (transcriptDetailLoaded && Number(lastDetail?.transcription?.id) === activeTranscriptionId) {
+      renderTranscript(lastDetail);
+      return;
+    }
     try {
       const detail = await api(`/api/transcriptions/${activeTranscriptionId}`);
+      transcriptDetailLoaded = true;
       renderTranscript(detail);
     } catch (error) {
       toast(error.message, "error");
@@ -944,7 +948,7 @@
   }
 
   function renderTranscript(detail) {
-    const previousDetail = lastDetail;
+    transcriptDetailLoaded = true;
     lastDetail = detail;
     const transcription = detail.transcription;
     const speakers = detail.speakers || [];
@@ -985,11 +989,15 @@
         return leftName.localeCompare(rightName) || left.start_ms - right.start_ms;
       });
     }
-    const appendOnlyLiveUpdate = canAppendLiveSegments(previousDetail, detail, segments);
+    const paragraphs = groupTranscriptSegments(segments, speakerNames, speakerNumbers);
     setTitle(transcription.title);
     renderMeetingResults(detail);
     document.querySelector("#editor-meta").textContent =
-      `${transcription.model} · ${transcription.language || Meet2Notes.t("transcript.detecting_language")} · ${Math.min(segments.length, transcriptVisibleLimit)} ${Meet2Notes.t("transcript.shown")} / ${detail.segments.length} ${Meet2Notes.t("transcript.segments")}${captureSession ? ` · ${Meet2Notes.t("transcript.live")}` : ""}`;
+      `${transcription.model} · ${transcription.language || Meet2Notes.t("transcript.detecting_language")} · ${Math.min(paragraphs.length, transcriptVisibleLimit)} parágrafos / ${detail.segments.length} segmentos${captureSession ? ` · ${Meet2Notes.t("transcript.live")}` : ""}`;
+    if (!document.querySelector("#meeting-tab-transcript").classList.contains("active")) {
+      segmentContainer.replaceChildren();
+      return;
+    }
     if (!detail.segments.length) {
       if (["running", "queued"].includes(transcription.status)) {
         segmentContainer.innerHTML = `
@@ -1011,19 +1019,13 @@
         </div>`;
       return;
     }
-    const segmentsToRender = appendOnlyLiveUpdate
-      ? segments.slice(previousDetail.segments.length)
-      : segments.slice(0, transcriptVisibleLimit);
-    const markup = segmentsToRender
-      .map((segment) => segmentRowHtml(segment, speakerNames, speakerNumbers))
-      .join("");
-    if (appendOnlyLiveUpdate) segmentContainer.insertAdjacentHTML("beforeend", markup);
-    else segmentContainer.innerHTML = markup;
-    if (!appendOnlyLiveUpdate && segments.length > segmentsToRender.length) {
-      const remaining = segments.length - segmentsToRender.length;
+    const paragraphsToRender = paragraphs.slice(0, transcriptVisibleLimit);
+    segmentContainer.innerHTML = paragraphsToRender.map(transcriptParagraphHtml).join("");
+    if (paragraphs.length > paragraphsToRender.length) {
+      const remaining = paragraphs.length - paragraphsToRender.length;
       segmentContainer.insertAdjacentHTML("beforeend", `
         <button type="button" class="button secondary transcript-load-more">
-          Carregar mais ${Math.min(100, remaining)} segmentos (${remaining} restantes)
+          Carregar mais ${Math.min(100, remaining)} parágrafos (${remaining} restantes)
         </button>`);
     }
     applySearch();
@@ -1038,12 +1040,60 @@
     }
   }
 
+  function groupTranscriptSegments(segments, speakerNames, speakerNumbers) {
+    const groups = [];
+    for (const segment of segments) {
+      const text = String(segment.text || "").trim();
+      if (!text) continue;
+      const speakerId = segment.speaker_id === null ? null : Number(segment.speaker_id);
+      const previous = groups[groups.length - 1];
+      const gapMs = previous ? Number(segment.start_ms) - previous.endMs : 0;
+      if (previous && previous.speakerId === speakerId && gapMs <= 3000
+          && previous.text.length + text.length <= 600) {
+        previous.text += ` ${text}`;
+        previous.endMs = Number(segment.end_ms);
+      } else {
+        groups.push({
+          speakerId,
+          speaker: speakerId === null
+            ? "Falante pendente"
+            : speakerNames.get(speakerId) || `Falante ${speakerNumbers.get(speakerId) || "?"}`,
+          startMs: Number(segment.start_ms),
+          endMs: Number(segment.end_ms),
+          quality: segment.metadata?.timestamp_quality || "recorded",
+          text,
+        });
+      }
+    }
+    if (document.querySelector("#transcript-order").value === "speaker") {
+      groups.sort((left, right) =>
+        left.speaker.localeCompare(right.speaker) || left.startMs - right.startMs);
+    }
+    return groups;
+  }
+
+  function transcriptParagraphHtml(group) {
+    const timestamp = group.quality === "unavailable"
+      ? ""
+      : `${group.quality === "approximate" ? "~" : ""}${formatTimestamp(group.startMs)}`;
+    return `
+      <article class="segment-row transcript-paragraph">
+        <header class="transcript-paragraph-meta">
+          <strong>${escapeHTML(group.speaker)}</strong>
+          ${timestamp ? `<time>${escapeHTML(timestamp)}</time>` : ""}
+        </header>
+        <p class="transcript-paragraph-text">${escapeHTML(group.text)}</p>
+      </article>`;
+  }
+
   function renderMeetingResults(detail) {
     const tabs = document.querySelector("#meeting-tabs");
     const transcription = detail.transcription;
     const ready = transcription.status === "completed" && !captureSession;
     tabs.classList.toggle("hidden", !ready);
-    renderSpeakerPanel(detail);
+    if (document.querySelector("#meeting-tab-speakers").classList.contains("active")) {
+      renderSpeakerPanel(detail);
+    }
     renderSummaryPanel();
     applyAudioAvailability();
   }
@@ -1056,8 +1106,6 @@
       || !activeTranscriptionId
       || detail?.transcription?.status !== "completed";
     const speakers = detail.speakers || [];
-    const segments = detail.segments || [];
-    const rawTurns = detail.speaker_turns || [];
     if (!speakers.length) {
       status.textContent = "Not processed";
       status.classList.remove("ready");
@@ -1068,10 +1116,6 @@
         </div>`;
       return;
     }
-    const previousFilter = container.querySelector("#speaker-panel-filter")?.value || "all";
-    const previousOrder = container.querySelector("#speaker-panel-order")?.value || "time";
-    const speakerMap = new Map(speakers.map((speaker) => [Number(speaker.id), speaker]));
-    const colorMap = new Map(speakers.map((speaker, index) => [Number(speaker.id), index]));
     status.textContent = `${speakers.length} speaker${speakers.length === 1 ? "" : "s"}`;
     status.classList.add("ready");
     const speakerColorCount = 6;
@@ -1092,9 +1136,6 @@
             <span><strong>${share}%</strong> share</span>
           </div>
           <div class="speaker-export-actions">
-            <button type="button" class="text-button speaker-card-action" data-play-speaker="${speaker.id}" title="Play this speaker's fragments" aria-label="Play this speaker's fragments" aria-pressed="false">
-              <svg viewBox="0 0 24 24" aria-hidden="true"><path d="m8 5 11 7-11 7V5Z"/></svg> Play
-            </button>
             <a class="text-button speaker-card-action" href="/api/transcriptions/${activeTranscriptionId}/speakers/${speaker.id}/text">
               <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 3h9l4 4v14H6zM15 3v5h5M9 12h7M9 16h7"/></svg> Export TXT
             </a>
@@ -1105,81 +1146,12 @@
             <button type="button" class="text-button speaker-card-action" data-remember-speaker="${speaker.id}" title="Use this voice to recognize ${escapeHTML(speaker.display_name)} in future meetings">
               <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 21a9 9 0 1 0-9-9 9 9 0 0 0 9 9Z"/><path d="m8.5 12 2.3 2.3 4.8-5"/></svg> Remember this voice
             </button>
-            <a class="text-button speaker-card-action" href="/api/transcriptions/${activeTranscriptionId}/speakers/${speaker.id}/audio?format=wav">Export WAV</a>
-            <a class="text-button speaker-card-action" href="/api/transcriptions/${activeTranscriptionId}/speakers/${speaker.id}/audio?format=mp3">Export MP3</a>
           </div>
         </article>`;
     }).join("");
-    let turns = rawTurns.filter((turn) =>
-      previousFilter === "all" || String(turn.speaker_id) === previousFilter);
-    if (previousOrder === "speaker") {
-      turns.sort((left, right) => {
-        const leftName = speakerMap.get(Number(left.speaker_id))?.display_name || "";
-        const rightName = speakerMap.get(Number(right.speaker_id))?.display_name || "";
-        return leftName.localeCompare(rightName) || left.start_ms - right.start_ms;
-      });
-    } else if (previousOrder === "duration") {
-      turns.sort((left, right) =>
-        (right.end_ms - right.start_ms) - (left.end_ms - left.start_ms));
-    } else {
-      turns.sort((left, right) => left.start_ms - right.start_ms);
-    }
-    const lines = turns.map((turn) => {
-      const speaker = speakerMap.get(Number(turn.speaker_id));
-      const transcriptText = transcriptTextForSpeakerTurn(turn, segments);
-      const colorIndex = colorMap.get(Number(turn.speaker_id)) || 0;
-      return `
-        <article class="speaker-line speaker-color-${colorIndex % speakerColorCount}">
-          <button class="speaker-fragment-play" data-play-range-start="${turn.start_ms}" data-play-range-end="${turn.end_ms}" title="Play this audio fragment" aria-label="Play this audio fragment" aria-pressed="false">
-            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="m8 5 11 7-11 7V5Z"/></svg>
-          </button>
-          <time>${formatTimestamp(turn.start_ms)}–${formatTimestamp(turn.end_ms)}<small>${formatTimestamp(turn.end_ms - turn.start_ms)}</small></time>
-          <div><strong><i class="speaker-line-dot" aria-hidden="true"></i>${escapeHTML(speaker?.display_name || "Unidentified")}</strong><p>${escapeHTML(transcriptText || "Diarized audio turn")}</p></div>
-        </article>`;
-    }).join("");
     container.innerHTML = `
-      <div class="speaker-overview-grid">${cards}</div>
-      <div class="speaker-panel-toolbar">
-        <div><strong>Audio fragments</strong><span>${turns.length} shown</span></div>
-        <label><span>Speaker</span><select id="speaker-panel-filter">
-          <option value="all">All speakers</option>
-          ${speakers.map((speaker) => `<option value="${speaker.id}">${escapeHTML(speaker.display_name)}</option>`).join("")}
-        </select></label>
-        <label><span>Order</span><select id="speaker-panel-order">
-          <option value="time">Timeline</option>
-          <option value="speaker">By speaker</option>
-          <option value="duration">Longest first</option>
-        </select></label>
-      </div>
-      <div class="speaker-turn-list">${lines || '<div class="result-empty"><strong>No audio fragments</strong><span>Choose another speaker.</span></div>'}</div>`;
-    container.querySelector("#speaker-panel-filter").value = previousFilter;
-    container.querySelector("#speaker-panel-order").value = previousOrder;
+      <div class="speaker-overview-grid">${cards}</div>`;
     applyAudioAvailability();
-  }
-
-  function transcriptTextForSpeakerTurn(turn, segments) {
-    const pieces = segments
-      .filter((segment) =>
-        segment.end_ms > turn.start_ms
-        && segment.start_ms < turn.end_ms)
-      .sort((left, right) => left.start_ms - right.start_ms)
-      .map((segment) => {
-        const words = Array.isArray(segment.metadata?.words)
-          ? segment.metadata.words
-          : [];
-        if (!words.length) return segment.text.trim();
-        return words
-          .filter((word) => {
-            const startMs = Number(word.start) * 1000;
-            const endMs = Number(word.end) * 1000;
-            return endMs > turn.start_ms && startMs < turn.end_ms;
-          })
-          .map((word) => String(word.word || ""))
-          .join("")
-          .trim();
-      })
-      .filter(Boolean);
-    return pieces.join(" ");
   }
 
   function showSpeakerSummary(speaker, job = null) {
@@ -1260,29 +1232,6 @@
     if (!rememberVoiceDialog.open) rememberVoiceDialog.showModal();
   }
 
-  function setAudioPlaybackButton(button, playing) {
-    if (!button) return;
-    const speakerSequence = button.matches("[data-play-speaker]");
-    const segmentPlayback = button.matches("[data-seek-ms]");
-    const playLabel = speakerSequence
-      ? "Play this speaker's fragments"
-      : segmentPlayback
-        ? `Play from ${formatTimestamp(Number(button.dataset.seekMs))}`
-        : "Play this audio fragment";
-    const pauseLabel = speakerSequence
-      ? "Pause this speaker's fragments"
-      : segmentPlayback
-        ? `Pause playback from ${formatTimestamp(Number(button.dataset.seekMs))}`
-        : "Pause this audio fragment";
-    button.setAttribute("aria-pressed", String(playing));
-    button.setAttribute("aria-label", playing ? pauseLabel : playLabel);
-    button.title = playing ? pauseLabel : playLabel;
-    button.classList.toggle("playing", playing);
-    button.innerHTML = playing
-      ? `<svg viewBox="0 0 24 24" aria-hidden="true"><rect x="7" y="5" width="3.5" height="14" rx="1"/><rect x="13.5" y="5" width="3.5" height="14" rx="1"/></svg>${speakerSequence ? " Pause" : ""}`
-      : `<svg viewBox="0 0 24 24" aria-hidden="true"><path d="m8 5 11 7-11 7V5Z"/></svg>${speakerSequence ? " Play" : ""}`;
-  }
-
   function openDeleteAudioDialog() {
     if (!meetingId || audioWasDeleted() || !recordings.length) return;
     const knownBytes = recordings.reduce(
@@ -1305,7 +1254,6 @@
         method: "DELETE",
       });
       recordings = [];
-      stopAudioPlayback();
       configureAudio();
       if (lastDetail) renderTranscript(lastDetail);
       deleteAudioDialog.close();
@@ -1316,44 +1264,6 @@
       confirmButton.disabled = false;
       confirmButton.textContent = "Delete audio permanently";
     }
-  }
-
-  function clearAudioPlaybackState() {
-    speakerPlaybackRanges = [];
-    speakerPlaybackIndex = -1;
-    audioStopAtSeconds = null;
-    setAudioPlaybackButton(activeAudioPlaybackButton, false);
-    activeAudioPlaybackButton = null;
-  }
-
-  function stopAudioPlayback() {
-    audio.pause();
-    clearAudioPlaybackState();
-  }
-
-  async function playAllSpeakerFragments(speakerId, button) {
-    if (!audio.getAttribute("src")) {
-      toast("The meeting audio is not available.", "error");
-      return;
-    }
-    stopAudioPlayback();
-    speakerPlaybackRanges = (lastDetail?.speaker_turns || [])
-      .filter((turn) => Number(turn.speaker_id) === Number(speakerId))
-      .sort((left, right) => left.start_ms - right.start_ms);
-    if (!speakerPlaybackRanges.length) {
-      toast("This speaker has no audio fragments.", "error");
-      return;
-    }
-    speakerPlaybackIndex = 0;
-    const range = speakerPlaybackRanges[0];
-    activeAudioPlaybackButton = button;
-    setAudioPlaybackButton(button, true);
-    audio.currentTime = range.start_ms / 1000;
-    audioStopAtSeconds = range.end_ms / 1000;
-    await audio.play().catch(() => {
-      clearAudioPlaybackState();
-      toast("The speaker audio could not be played.", "error");
-    });
   }
 
   function renderInlineMarkdown(source) {
@@ -1514,19 +1424,23 @@
       toggleButton.hidden = true;
       container.hidden = false;
       editor.hidden = true;
-      status.textContent = "Not processed";
+      status.textContent = "Sem resumo";
       status.classList.remove("ready");
       container.innerHTML = `
         <div class="result-empty">
-          <strong>No AI report yet</strong>
-          <span>The summary, decisions and action items will appear here.</span>
+          <strong>Resumo ainda não disponível</strong>
+          <span>A transcrição está salva. Gere um resumo com o mecanismo de IA configurado.</span>
         </div>`;
+      document.querySelector("#ai-rebuild-notes").querySelector("span").textContent = "Gerar resumo";
+      document.querySelector("#ai-rebuild-notes").title = "Gerar resumo da reunião";
       return;
     }
     if (editingSummaryId && Number(editingSummaryId) !== Number(summary.id)) {
       editingSummaryId = null;
     }
     const editing = Number(editingSummaryId) === Number(summary.id);
+    document.querySelector("#ai-rebuild-notes").querySelector("span").textContent = "Atualizar resumo";
+    document.querySelector("#ai-rebuild-notes").title = "Atualizar resumo da reunião";
     const editable = summary.status === "completed" && Boolean(summary.content_markdown);
     copyButton.hidden = !editable;
     editButton.hidden = !editable || editing;
@@ -1973,55 +1887,6 @@
     syncPostprocessSpeakerControls();
     syncPostprocessSummaryControls();
     if (!postprocessDialog.open) postprocessDialog.showModal();
-  }
-
-  function canAppendLiveSegments(previousDetail, detail, visibleSegments) {
-    if (!captureSession || !previousDetail ||
-        Number(previousDetail.transcription?.id) !== Number(detail.transcription?.id) ||
-        document.querySelector("#transcript-speaker-filter").value !== "all" ||
-        document.querySelector("#transcript-order").value !== "time") return false;
-    const previous = previousDetail.segments || [];
-    const current = detail.segments || [];
-    const previousSpeakers = (previousDetail.speakers || [])
-      .map((speaker) => `${speaker.id}:${speaker.display_name}`).join("|");
-    const currentSpeakers = (detail.speakers || [])
-      .map((speaker) => `${speaker.id}:${speaker.display_name}`).join("|");
-    if (!previous.length || current.length <= previous.length ||
-        visibleSegments.length !== current.length ||
-        previousSpeakers !== currentSpeakers) return false;
-    return previous.every((segment, index) => {
-      const next = current[index];
-      return next && segment.segment_index === next.segment_index &&
-        segment.id === next.id && segment.text === next.text &&
-        segment.start_ms === next.start_ms && segment.end_ms === next.end_ms &&
-        segment.speaker_id === next.speaker_id && segment.is_final === next.is_final;
-    });
-  }
-
-  function segmentRowHtml(segment, speakerNames, speakerNumbers) {
-    const rawSpeaker = Number(segment.speaker_id);
-    const hasSpeaker = segment.speaker_id !== null && Number.isFinite(rawSpeaker);
-    const speakerNumber = hasSpeaker ? speakerNumbers.get(rawSpeaker) : null;
-    const speakerColor = hasSpeaker ? Math.abs(speakerNumber - 1) % 6 : null;
-    const provisional = !segment.is_final;
-    const timestampQuality = segment.metadata?.timestamp_quality || "recorded";
-    const timestampAvailable = timestampQuality !== "unavailable";
-    const timestampDescription = timestampQuality === "approximate"
-      ? "Tempo aproximado"
-      : timestampQuality === "unavailable" ? "Sem marcação de tempo" : "Reproduzir a partir deste ponto";
-    return `
-      <article class="segment-row ${hasSpeaker ? `speaker-color-${speakerColor}` : "speaker-pending"} ${provisional ? "live-segment" : ""}" data-segment-id="${segment.id}">
-        <button class="timestamp-button" data-seek-ms="${segment.start_ms}" title="${timestampDescription}" aria-label="${timestampDescription}" aria-pressed="false" ${timestampAvailable ? "" : "disabled"}>
-          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="m8 5 11 7-11 7V5Z"/></svg>
-        </button>
-        <div class="segment-cue">
-          <span class="segment-speaker"><i></i>${hasSpeaker ? escapeHTML(speakerNames.get(rawSpeaker) || t("speaker", { number: speakerNumber })) : "Speaker pending"}</span>
-          ${timestampQuality === "approximate" ? '<span class="engine-runtime-pill">Tempo aproximado</span>' : timestampQuality === "unavailable" ? '<span class="engine-runtime-pill">Sem marcação de tempo</span>' : ""}
-          ${provisional ? '<span class="live-segment-badge"><i></i> Live</span>' : ""}
-        </div>
-        <textarea class="segment-editor" rows="1" aria-label="Transcript segment ${segment.segment_index + 1}" ${provisional ? "readonly" : ""}>${escapeHTML(segment.text)}</textarea>
-        <button class="segment-save ${provisional ? "hidden" : ""}" data-save-segment="${segment.id}">Save</button>
-      </article>`;
   }
 
   function configurePostprocessAvailability() {
@@ -2888,12 +2753,6 @@
       : `${String(minutes).padStart(2, "0")}:${String(remainder).padStart(2, "0")}`;
   }
 
-  function setSaveState(saving, text = "Saved") {
-    const state = document.querySelector("#editor-save-state");
-    state.classList.toggle("saving", saving);
-    state.lastChild.textContent = ` ${text}`;
-  }
-
   function syncStartAction() {
     document.querySelector("#start-transcription").classList.toggle(
       "hidden",
@@ -2907,7 +2766,7 @@
   function applySearch() {
     const query = document.querySelector("#transcript-search").value.trim().toLowerCase();
     document.querySelectorAll(".segment-row").forEach((row) => {
-      const text = row.querySelector(".segment-editor").value.toLowerCase();
+      const text = (row.querySelector(".transcript-paragraph-text")?.textContent || "").toLowerCase();
       row.classList.toggle("filtered", Boolean(query) && !text.includes(query));
     });
   }
@@ -2966,6 +2825,18 @@
     const segments = lastDetail?.segments || [];
     const speakerMap = new Map((lastDetail?.speakers || []).map((speaker) =>
       [Number(speaker.id), speaker.display_name]));
+    if (layout === "speaker" && speakers) {
+      const speakerNumbers = new Map((lastDetail?.speakers || []).map((speaker, index) =>
+        [Number(speaker.id), index + 1]));
+      return groupTranscriptSegments(segments, speakerMap, speakerNumbers)
+        .map((group) => {
+          const timestamp = group.quality === "unavailable"
+            ? ""
+            : ` · \`${group.quality === "approximate" ? "~" : ""}${formatTimestamp(group.startMs)}\``;
+          return `**${group.speaker}**${timestamp}\n\n${group.text}`;
+        })
+        .join("\n\n");
+    }
     const formatSegment = (segment) => {
       const parts = [];
       if (timestamps) parts.push(`[${formatTimestamp(segment.start_ms)}]`);
@@ -2994,6 +2865,35 @@
     return editingSummaryId ? editor.value.trim() : (summary?.content_markdown || "").trim();
   }
 
+  function meetingMarkdownForExport() {
+    const duration = formatDuration(currentMeeting?.duration_ms || 0);
+    const summary = aiNotesForExport() || "_Resumo ainda não disponível._";
+    const transcript = transcriptForExport({ layout: "speaker", timestamps: true, speakers: true })
+      || "_Ainda não há transcrição disponível._";
+    const notes = String(currentMeeting?.description || "").trim();
+    return [
+      "---",
+      `title: ${JSON.stringify(draftTitle)}`,
+      `client: ${JSON.stringify(currentMeeting?.client_name || "A classificar")}`,
+      `project: ${JSON.stringify(currentMeeting?.project_name || "A classificar")}`,
+      `date: ${JSON.stringify(currentMeeting?.started_at || currentMeeting?.created_at || "")}`,
+      `duration: ${JSON.stringify(duration)}`,
+      "---",
+      "",
+      `# ${draftTitle}`,
+      "",
+      "## Resumo",
+      "",
+      summary,
+      ...(notes ? ["", "## Anotações", "", notes] : []),
+      "",
+      "## Transcrição",
+      "",
+      transcript,
+      "",
+    ].join("\n");
+  }
+
   function plainTextExportHtml(content) {
     return String(content || "").replace(/\r\n?/g, "\n").split(/\n{2,}/)
       .map((paragraph) => `<p>${escapeHTML(paragraph).replace(/\n/g, "<br>")}</p>`)
@@ -3009,9 +2909,11 @@
     const isTranscript = source === "transcript";
     pendingExport = { source, format };
     document.querySelector("#export-dialog-title").textContent =
-      `Export ${isTranscript ? "transcription" : "AI notes"}`;
-    document.querySelector("#export-layout-options").hidden = !isTranscript;
-    document.querySelector("#export-detail-options").hidden = !isTranscript;
+      isTranscript && format === "markdown"
+        ? "Exportar reunião em Markdown"
+        : `Export ${isTranscript ? "transcription" : "AI notes"}`;
+    document.querySelector("#export-layout-options").hidden = !isTranscript || format === "markdown";
+    document.querySelector("#export-detail-options").hidden = !isTranscript || format === "markdown";
     document.querySelector("#export-confirm").textContent = format === "clipboard" ? "Copy" : "Export";
     if (!exportDialog.open) exportDialog.showModal();
   }
@@ -3019,7 +2921,12 @@
   async function exportPendingContent() {
     if (!pendingExport) return;
     const { source, format } = pendingExport;
-    const content = source === "transcript"
+    if (source === "transcript" && format === "markdown" && !transcriptDetailLoaded) {
+      await selectTranscription(activeTranscriptionId, { forceLoad: true });
+    }
+    const content = source === "transcript" && format === "markdown"
+      ? meetingMarkdownForExport()
+      : source === "transcript"
       ? transcriptForExport({
         layout: document.querySelector('input[name="export-layout"]:checked').value,
         timestamps: document.querySelector("#export-timestamps").checked,
@@ -3219,9 +3126,20 @@
     if (lastDetail) renderTranscript(lastDetail);
   });
   document.querySelectorAll("[data-meeting-tab]").forEach((button) =>
-    button.addEventListener("click", () => {
+    button.addEventListener("click", async () => {
       if (button.getAttribute("aria-selected") === "true") return;
-      runAfterUnsavedAiCheck(() => setActiveMeetingTab(button.dataset.meetingTab));
+      runAfterUnsavedAiCheck(async () => {
+        const tab = button.dataset.meetingTab;
+        setActiveMeetingTab(tab);
+        if (!lastDetail) return;
+        if (tab === "transcript" && !transcriptDetailLoaded) {
+          await selectTranscription(activeTranscriptionId, { forceLoad: true });
+        } else if (tab === "transcript") renderTranscript(lastDetail);
+        else if (tab === "speakers" && !transcriptDetailLoaded) {
+          await selectTranscription(activeTranscriptionId, { forceLoad: true });
+        } else if (tab === "speakers") renderSpeakerPanel(lastDetail);
+        else if (tab === "intelligence") renderSummaryPanel();
+      });
     }));
   document.querySelector("#ai-rebuild-notes").addEventListener("click", () =>
     runAfterUnsavedAiCheck(openAiRebuildDialog));
@@ -3371,15 +3289,6 @@
       openStartDialog();
       return;
     }
-    const playSpeaker = event.target.closest("[data-play-speaker]");
-    if (playSpeaker) {
-      if (activeAudioPlaybackButton === playSpeaker && !audio.paused) {
-        stopAudioPlayback();
-      } else {
-        await playAllSpeakerFragments(playSpeaker.dataset.playSpeaker, playSpeaker);
-      }
-      return;
-    }
     const summarizeSpeaker = event.target.closest("[data-summarize-speaker]");
     if (summarizeSpeaker) {
       await startSpeakerSummary(summarizeSpeaker.dataset.summarizeSpeaker);
@@ -3390,93 +3299,9 @@
       await rememberSpeakerVoice(remember.dataset.rememberSpeaker);
       return;
     }
-    const range = event.target.closest("[data-play-range-start]");
-    if (range) {
-      if (!audio.getAttribute("src")) {
-        toast("The meeting audio is not available.", "error");
-        return;
-      }
-      if (activeAudioPlaybackButton === range && !audio.paused) {
-        stopAudioPlayback();
-        return;
-      }
-      stopAudioPlayback();
-      audio.currentTime = Number(range.dataset.playRangeStart) / 1000;
-      audioStopAtSeconds = Number(range.dataset.playRangeEnd) / 1000;
-      activeAudioPlaybackButton = range;
-      setAudioPlaybackButton(range, true);
-      await audio.play().catch(() => {
-        clearAudioPlaybackState();
-        toast("The audio fragment could not be played.", "error");
-      });
-      return;
-    }
-    const seek = event.target.closest("[data-seek-ms]");
-    if (seek) {
-      if (!audio.getAttribute("src")) {
-        toast("The meeting audio is not available.", "error");
-        return;
-      }
-      if (activeAudioPlaybackButton === seek && !audio.paused) {
-        stopAudioPlayback();
-        return;
-      }
-      stopAudioPlayback();
-      audio.currentTime = Number(seek.dataset.seekMs) / 1000;
-      activeAudioPlaybackButton = seek;
-      setAudioPlaybackButton(seek, true);
-      await audio.play().catch(() => {
-        clearAudioPlaybackState();
-        toast("The audio could not be played.", "error");
-      });
-      return;
-    }
-    const save = event.target.closest("[data-save-segment]");
-    if (!save) return;
-    const row = save.closest(".segment-row");
-    const editor = row.querySelector(".segment-editor");
-    save.disabled = true;
-    setSaveState(true, "Saving…");
-    try {
-      await api(`/api/transcript-segments/${save.dataset.saveSegment}`, {
-        method: "PATCH",
-        body: JSON.stringify({ text: editor.value.trim() }),
-      });
-      row.classList.remove("dirty");
-      setSaveState(false);
-      toast("Segment saved.");
-    } catch (error) {
-      toast(error.message, "error");
-      setSaveState(false, "Save failed");
-    } finally {
-      save.disabled = false;
-    }
   });
-
-  audio.addEventListener("timeupdate", () => {
-    if (audioStopAtSeconds === null || audio.currentTime < audioStopAtSeconds) return;
-    if (speakerPlaybackIndex >= 0 && speakerPlaybackIndex + 1 < speakerPlaybackRanges.length) {
-      speakerPlaybackIndex += 1;
-      const next = speakerPlaybackRanges[speakerPlaybackIndex];
-      audio.currentTime = next.start_ms / 1000;
-      audioStopAtSeconds = next.end_ms / 1000;
-      audio.play().catch(() => {
-        clearAudioPlaybackState();
-        toast("Speaker playback could not continue.", "error");
-      });
-      return;
-    }
-    stopAudioPlayback();
-  });
-
-  audio.addEventListener("pause", clearAudioPlaybackState);
-  audio.addEventListener("ended", clearAudioPlaybackState);
 
   document.addEventListener("change", async (event) => {
-    if (event.target.matches("#speaker-panel-filter, #speaker-panel-order")) {
-      renderSpeakerPanel(lastDetail);
-      return;
-    }
     if (!event.target.matches("[data-speaker-name]")) return;
     const input = event.target;
     const name = input.value.trim();
@@ -3515,13 +3340,6 @@
       event.target.value = event.target.dataset.originalName;
       event.target.blur();
     }
-  });
-
-  segmentContainer.addEventListener("input", (event) => {
-    if (!event.target.matches(".segment-editor")) return;
-    event.target.closest(".segment-row").classList.add("dirty");
-    setSaveState(true, "Unsaved changes");
-    applySearch();
   });
 
   document.addEventListener("localmeet:languagechange", () => {

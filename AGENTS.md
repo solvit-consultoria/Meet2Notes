@@ -4,6 +4,7 @@
 
 - This is the public `solvit-consultoria/Meet2Notes` fork based on upstream tag `v0.6.1`. Keep the original project as the `upstream` remote; `origin` is the fork.
 - Implement the local meeting MVP incrementally: separate local audio masters, optional derived mix/transcription, Portuguese UI, explicit export organization, and local read-only MCP. Treat planned behavior as work to implement, not as already present upstream.
+- Finalized exports are a single Markdown file with frontmatter, summary/manual notes first, then the complete transcript grouped into speaker paragraphs with timestamps. Keep source audio in local app storage; do not copy it into the export folder by default.
 - Preserve upstream architecture and MIT attribution. Avoid unrelated rewrites and native-installer work in this MVP.
 
 ## Privacy and integration boundaries

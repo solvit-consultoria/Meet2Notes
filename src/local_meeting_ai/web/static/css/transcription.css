@@ -1006,6 +1006,41 @@
   place-items: center;
 }
 
+.minimal-segments .transcript-paragraph {
+  display: block;
+  min-height: 0;
+  margin: 0 0 10px;
+  padding: 13px 16px;
+  border-radius: 12px;
+}
+
+.transcript-paragraph-meta {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  color: #7a3429;
+  font-size: 12px;
+}
+
+.transcript-paragraph-meta time {
+  color: #667085;
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+}
+
+.transcript-paragraph-text {
+  margin: 6px 0 0;
+  color: #243044;
+  font-size: 14px;
+  line-height: 1.7;
+  white-space: pre-wrap;
+}
+
+.transcript-load-more {
+  width: 100%;
+  margin: 8px 0 20px;
+}
+
 .minimal-transcript-page.capture-active .timestamp-button,
 .minimal-transcript-page.capture-active .speaker-fragment-play,
 .minimal-transcript-page.capture-active [data-play-speaker] {

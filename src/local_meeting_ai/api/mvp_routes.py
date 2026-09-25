@@ -121,6 +121,22 @@ def export_meeting(
     target_root = _validated_export_root(export_root, container)
     transcription = container.transcriptions.active_for_meeting(meeting_id)
     segments = container.transcriptions.segments(transcription.id) if transcription else []
+    summary_markdown = None
+    speaker_names: dict[int, str] = {}
+    if transcription:
+        summary = next(
+            (
+                item
+                for item in container.summaries.list_for_meeting(meeting_id)
+                if item.transcription_id == transcription.id
+                and item.status == "completed"
+                and item.content_markdown
+            ),
+            None,
+        )
+        summary_markdown = summary.content_markdown if summary else None
+        speakers, _turns = container.speaker_service.list_for_transcription(transcription.id)
+        speaker_names = {speaker.id: speaker.display_name for speaker in speakers}
     try:
         return export_meeting_bundle(
             meeting=meeting,
@@ -128,6 +144,8 @@ def export_meeting(
             transcription=transcription,
             segments=segments,
             export_root=target_root,
+            summary_markdown=summary_markdown,
+            speaker_names=speaker_names,
         )
     except ValueError as error:
         raise ValidationError(str(error)) from error
