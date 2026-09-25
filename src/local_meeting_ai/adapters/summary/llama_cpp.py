@@ -79,6 +79,13 @@ CUSTOM_GGUF_PROFILE: dict[str, Any] = {
 }
 logger = logging.getLogger(__name__)
 
+# The shipped LFM2.5 Q4 file is about 731 MB, while a recent local run reached
+# roughly 1.7 GB of process RAM. Reserve that observed ~1 GB runtime/context
+# overhead plus 512 MiB of OS breathing room before mapping a model. For other
+# GGUFs, use their actual file size so larger weights require more headroom.
+SUMMARY_RUNTIME_OVERHEAD_BYTES = 1024**3
+SUMMARY_OS_HEADROOM_BYTES = 512 * 1024**2
+
 
 def _summary_setup_command(*, is_windows: bool | None = None) -> str:
     windows = os.name == "nt" if is_windows is None else is_windows
@@ -260,7 +267,18 @@ class LlamaCppSummaryEngine:
                     )
                 return
             path = self._resolve_model_path(config, allow_model_download)
+            self._require_model_memory(path, config, purpose="load this model")
             self._get_model(path, config)
+            try:
+                self._require_available_memory(
+                    SUMMARY_OS_HEADROOM_BYTES,
+                    purpose="keep Windows responsive during local summaries",
+                )
+            except CapabilityUnavailableError:
+                # Loading a mapped model can itself leave the machine short of
+                # RAM. Release it immediately instead of leaving the UI heavy.
+                self.unload()
+                raise
         except Exception as error:
             failure = error
             raise
@@ -291,7 +309,20 @@ class LlamaCppSummaryEngine:
             model = None
             if not remote:
                 path = self._resolve_model_path(config, False)
+                self._require_model_memory(
+                    path,
+                    config,
+                    purpose="generate a local summary",
+                )
                 model = self._get_model(path, config)
+                try:
+                    self._require_available_memory(
+                        SUMMARY_OS_HEADROOM_BYTES,
+                        purpose="continue local summary generation",
+                    )
+                except CapabilityUnavailableError:
+                    self.unload()
+                    raise
             context_length = max(1024, int(config.get("context_length", 16384)))
             maximum_tokens = min(
                 max(128, int(config.get("max_output_tokens", 1024))),
@@ -845,6 +876,84 @@ class LlamaCppSummaryEngine:
             )
             self._model_key = key
             return self._model
+
+    @staticmethod
+    def _available_memory_bytes() -> int | None:
+        """Return OS-available physical RAM, or None when metrics are unavailable."""
+        try:
+            psutil = importlib.import_module("psutil")
+            return int(psutil.virtual_memory().available)
+        except Exception:
+            logger.warning("Could not read available RAM; skipping local summary memory guard")
+            return None
+
+    @staticmethod
+    def _model_load_requirement(path: Path) -> int:
+        try:
+            model_bytes = path.stat().st_size
+        except OSError:
+            # Keep a conservative minimum if the model file cannot be inspected.
+            model_bytes = 0
+        return model_bytes + SUMMARY_RUNTIME_OVERHEAD_BYTES + SUMMARY_OS_HEADROOM_BYTES
+
+    def _require_available_memory(self, required_bytes: int, *, purpose: str) -> None:
+        available_bytes = self._available_memory_bytes()
+        if available_bytes is None or available_bytes >= required_bytes:
+            return
+        available_gib = available_bytes / (1024**3)
+        required_gib = required_bytes / (1024**3)
+        raise CapabilityUnavailableError(
+            f"Not enough available RAM to {purpose}: Windows reports "
+            f"{available_gib:.1f} GiB available; this local model needs about "
+            f"{required_gib:.1f} GiB before loading (model size plus a 1 GiB "
+            "runtime/context allowance and 512 MiB system headroom). Close other "
+            "memory-heavy apps and retry, choose a smaller local model, or select "
+            "a remote summary provider."
+        )
+
+    def _require_model_memory(
+        self,
+        path: Path,
+        config: dict[str, Any],
+        *,
+        purpose: str,
+    ) -> None:
+        required_bytes = (
+            SUMMARY_OS_HEADROOM_BYTES
+            if self._model_matches(path, config)
+            else self._model_load_requirement(path)
+        )
+        try:
+            self._require_available_memory(required_bytes, purpose=purpose)
+        except CapabilityUnavailableError:
+            # A resident model can itself be the reason the machine is short on
+            # RAM. Release it before returning the actionable error.
+            if self._model is not None:
+                self.unload()
+            raise
+
+    def _model_matches(self, path: Path, config: dict[str, Any]) -> bool:
+        if self._model is None or self._model_key is None:
+            return False
+        # Mirror _get_model's cache key so a configuration change that causes a
+        # reload receives the larger pre-load check too.
+        key = (
+            str(path),
+            int(config.get("context_length", 16384)),
+            int(config.get("batch_size", 512)),
+            int(config.get("micro_batch_size", 128)),
+            int(config.get("threads", 0)),
+            int(config.get("batch_threads", 0)),
+            int(config.get("gpu_layers", -1)),
+            int(config.get("main_gpu", 0)),
+            str(config.get("split_mode", "layer")),
+            bool(config.get("use_mmap", True)),
+            bool(config.get("use_mlock", False)),
+            bool(config.get("offload_kqv", True)),
+            bool(config.get("flash_attention", True)),
+            bool(config.get("numa", False)),
+        )
+        return self._model_key == key
 
     def _resolve_model_path(
         self,

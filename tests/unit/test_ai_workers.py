@@ -101,6 +101,30 @@ def test_summary_model_missing_error_points_to_settings_install_action(
         engine.shutdown()
 
 
+def test_local_summary_preflight_rejects_low_available_memory(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    engine = LlamaCppSummaryEngine(tmp_path / "models")
+    model_path = tmp_path / "summary.gguf"
+    model_path.write_bytes(b"model")
+    monkeypatch.setattr(engine, "_resolve_model_path", lambda config, allow: model_path)
+    monkeypatch.setattr(engine, "_available_memory_bytes", lambda: 1024**3)
+
+    def unexpected_load(*args: Any, **kwargs: Any) -> None:
+        pytest.fail("model loading must not start when preflight RAM is insufficient")
+
+    monkeypatch.setattr(engine, "_get_model", unexpected_load)
+    try:
+        with pytest.raises(
+            CapabilityUnavailableError,
+            match=r"Not enough available RAM.*Close other memory-heavy apps",
+        ):
+            engine._prepare_sync({"provider": "local"}, False)
+    finally:
+        engine.shutdown()
+
+
 def test_windows_summary_setup_command_uses_quoted_absolute_project_root(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
@@ -163,6 +187,7 @@ def test_long_summary_uses_hierarchical_map_reduce(
     progress_messages: list[str] = []
     monkeypatch.setattr(engine, "_resolve_model_path", lambda config, download: tmp_path)
     monkeypatch.setattr(engine, "_get_model", lambda path, config: model)
+    monkeypatch.setattr(engine, "_model_matches", lambda path, config: True)
     transcript = "\n".join(
         f"[{index:02d}:00] Speaker {index % 3 + 1}: decision {index} " + "detail " * 30
         for index in range(240)
