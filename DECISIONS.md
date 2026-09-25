@@ -19,6 +19,7 @@ This file separates verified `v0.6.1` behavior from intended fork changes.
 - MCP: reuse a local `stdio`, read-only surface only. No remote MCP/tunnel, write operation, or ChatGPT web/Notion AI connection in this MVP.
 - UX: Portuguese local browser interface, manual start/stop, and at most a non-starting suggestion that requires an explicit click. No custom native installer in this delivery.
 - UX performance: open completed meetings on the summary tab. Fetch the full transcript only when its tab is requested; display a lightweight speaker-attributed paragraph view with search and incremental loading, without per-segment audio players/edit controls or a speaker-turn audio list.
+- Speaker attribution: default to automatic speaker-count estimation and acoustic voice clustering; allow a known count when the user supplies it. Keep unknown segments explicitly unassigned and offer a retry. Map a cluster to a real name only through a saved voice profile or a user edit; transcript wording can be shown as a suggestion but must not silently establish identity.
 - Default AI summary: use concise headings for summary, key points, confirmed decisions, agreed actions, and open items. Match the transcript language (Brazilian Portuguese for Portuguese meetings); omit unsupported sections, distinguish suggestions from decisions, and never infer owners or deadlines.
 - Release: preserve upstream attribution and updater safety; adapt or disable fork-incompatible update flow so it cannot overwrite fork work. Publish only after acceptance checks pass.
 

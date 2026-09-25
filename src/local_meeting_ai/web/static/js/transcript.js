@@ -1020,7 +1020,18 @@
       return;
     }
     const paragraphsToRender = paragraphs.slice(0, transcriptVisibleLimit);
-    segmentContainer.innerHTML = paragraphsToRender.map(transcriptParagraphHtml).join("");
+    const hasUnassignedSpeakers = detail.segments.some(
+      (segment) => segment.speaker_id === null || segment.speaker_id === undefined,
+    );
+    const speakerNotice = transcription.status === "completed" && hasUnassignedSpeakers
+      ? `<aside class="transcript-identification-notice" role="status">
+          <div><strong>Há falas sem falante identificado</strong>
+            <p>A identificação automática agrupa vozes pelo timbre e estima quantas pessoas falaram. Depois você pode associar nomes ou perfis de voz.</p></div>
+          <button class="button secondary" type="button" data-open-speaker-rebuild>Identificar falantes</button>
+        </aside>`
+      : "";
+    segmentContainer.innerHTML = speakerNotice
+      + paragraphsToRender.map(transcriptParagraphHtml).join("");
     if (paragraphs.length > paragraphsToRender.length) {
       const remaining = paragraphs.length - paragraphsToRender.length;
       segmentContainer.insertAdjacentHTML("beforeend", `
@@ -1056,7 +1067,7 @@
         groups.push({
           speakerId,
           speaker: speakerId === null
-            ? "Falante pendente"
+            ? "Não identificado"
             : speakerNames.get(speakerId) || `Falante ${speakerNumbers.get(speakerId) || "?"}`,
           startMs: Number(segment.start_ms),
           endMs: Number(segment.end_ms),
@@ -1077,7 +1088,7 @@
       ? ""
       : `${group.quality === "approximate" ? "~" : ""}${formatTimestamp(group.startMs)}`;
     return `
-      <article class="segment-row transcript-paragraph">
+      <article class="transcript-paragraph">
         <header class="transcript-paragraph-meta">
           <strong>${escapeHTML(group.speaker)}</strong>
           ${timestamp ? `<time>${escapeHTML(timestamp)}</time>` : ""}
@@ -2765,7 +2776,7 @@
 
   function applySearch() {
     const query = document.querySelector("#transcript-search").value.trim().toLowerCase();
-    document.querySelectorAll(".segment-row").forEach((row) => {
+    document.querySelectorAll(".transcript-paragraph").forEach((row) => {
       const text = (row.querySelector(".transcript-paragraph-text")?.textContent || "").toLowerCase();
       row.classList.toggle("filtered", Boolean(query) && !text.includes(query));
     });
@@ -3112,6 +3123,10 @@
     if (lastDetail) renderTranscript(lastDetail);
   });
   segmentContainer.addEventListener("click", (event) => {
+    if (event.target.closest("[data-open-speaker-rebuild]")) {
+      openSpeakerRebuildDialog();
+      return;
+    }
     const button = event.target.closest(".transcript-load-more");
     if (!button || !lastDetail) return;
     transcriptVisibleLimit += 100;
@@ -3371,7 +3386,8 @@
         if (["completed", "failed", "cancelled"].includes(rebuildJob.status)) {
           activeSpeakerRebuildJobId = null;
           if (rebuildJob.status === "completed" && activeTranscriptionId) {
-            await selectTranscription(activeTranscriptionId);
+            setActiveMeetingTab("speakers");
+            await selectTranscription(activeTranscriptionId, { forceLoad: true });
             toast("Speaker identification rebuilt.", "success");
           } else {
             renderSpeakerPanel();
@@ -3422,9 +3438,12 @@
     terminal.forEach((job) => terminalJobIds.add(job.uuid));
     if (!newlyTerminal) return;
     if (["transcribe", "diarize"].includes(newlyTerminal.job_type)) {
+      if (newlyTerminal.job_type === "diarize" && newlyTerminal.status === "completed") {
+        setActiveMeetingTab("speakers");
+      }
       versions = await api(`/api/meetings/${meetingId}/transcriptions`);
       const preferred = versions.find((item) => item.is_active) || versions[0];
-      if (preferred) await selectTranscription(preferred.id);
+      if (preferred) await selectTranscription(preferred.id, { forceLoad: true });
     }
     if (newlyTerminal.job_type === "summarize" &&
         newlyTerminal.payload?.summary_scope !== "speaker") {
