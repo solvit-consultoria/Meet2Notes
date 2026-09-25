@@ -292,11 +292,12 @@ class DiarizeCpuEngine:
         process = self._process
         if process is None or process.stdin is None or process.stdout is None:
             raise CapabilityUnavailableError("The diarize CPU worker did not start")
+        worker_stdout = process.stdout
         lines: queue.Queue[str | None] = queue.Queue()
 
         def read_response() -> None:
             try:
-                lines.put(process.stdout.readline())
+                lines.put(worker_stdout.readline())
             except (OSError, ValueError):
                 lines.put(None)
 
