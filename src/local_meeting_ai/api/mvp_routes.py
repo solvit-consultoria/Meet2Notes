@@ -76,7 +76,9 @@ def update_mvp_settings(
     if "audio_api_model" in supplied:
         values["mvp_audio_api_model"] = supplied["audio_api_model"].strip()
     if payload.export_root is not None:
-        values["mvp_export_root"] = _validated_export_root(payload.export_root, container)
+        values["mvp_export_root"] = str(
+            _validated_export_root(payload.export_root, container)
+        )
     if values:
         container.preferences.update(values)
     return mvp_settings(container)
