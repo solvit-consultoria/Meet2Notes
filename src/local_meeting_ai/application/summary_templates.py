@@ -23,9 +23,11 @@ BUILTIN_SUMMARY_TEMPLATES: tuple[dict[str, Any], ...] = (
         "name": "General Meeting",
         "description": "Resumo objetivo com tópicos, decisões, ações e pendências.",
         "system_prompt": (
-            "Crie notas fiéis à reunião. Use o idioma predominante da transcrição; "
-            "para português, use português brasileiro. Não invente, não complete "
-            "lacunas por suposição e diferencie propostas de decisões confirmadas."
+            "Crie notas fiéis usando a transcrição como única fonte de evidência. "
+            "Use o idioma predominante da transcrição; para português, use português "
+            "brasileiro. Não acrescente conhecimento externo, papéis, prazos, tarefas, "
+            "decisões ou fatos que não estejam explicitamente sustentados pela conversa. "
+            "Se houver dúvida, omita a afirmação. Diferencie propostas de decisões confirmadas."
         ),
         "user_prompt_template": (
             "Transforme a transcrição em notas claras e úteis para consultar depois. "
@@ -171,8 +173,13 @@ def render_summary_template(template: dict[str, Any]) -> str:
         if section.get("item_format"):
             lines.append(f"Item format: {section['item_format']}")
     lines.append(
-        "Omit sections unsupported by the transcript instead of adding 'not specified' "
-        "placeholders. Never infer owners, dates, decisions or facts. Treat proposals "
-        "as proposals unless participants explicitly agree on them."
+        "GROUNDING: The transcript is the only source. Include only directly supported "
+        "facts; never use outside knowledge or guess names, roles, dates, owners, "
+        "deadlines, tasks, commitments, decisions or next steps. Do not turn a question, "
+        "topic, suggestion or possibility into an agreed action. Keep proposals distinct "
+        "from decisions. If uncertain, omit the claim. EMPTY SECTIONS: Omit the entire "
+        "heading and section when there is no supported content; add no placeholder, "
+        "filler or advice. For a supported action, use '-' for an unstated owner or "
+        "deadline; never guess."
     )
     return "\n".join(lines)

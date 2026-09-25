@@ -212,7 +212,10 @@ def test_note_format_renders_an_ordered_grounded_prompt() -> None:
     )
     assert "## Decisions" in prompt
     assert "Item format: | Decision | Owner |" in prompt
-    assert "Never infer owners" in prompt
+    assert "The transcript is the only source" in prompt
+    assert "use '-' for an unstated owner or deadline; never guess" in prompt
+    assert "Omit the entire heading and section" in prompt
+    assert "add no placeholder, filler or advice" in prompt
 
 
 def test_default_meeting_summary_uses_portuguese_and_separates_proposals_from_decisions() -> None:
@@ -225,8 +228,13 @@ def test_default_meeting_summary_uses_portuguese_and_separates_proposals_from_de
     assert "## Decisões" in prompt
     assert "## Ações combinadas" in prompt
     assert "Brazilian Portuguese" in prompt
-    assert "Treat proposals as proposals" in prompt
-    assert "not specified" in prompt
+    assert "Keep proposals distinct from decisions." in prompt
+    assert "the transcript is the only source" in prompt.lower()
+    assert (
+        "Do not turn a question, topic, suggestion or possibility into an agreed action."
+        in prompt
+    )
+    assert "EMPTY SECTIONS: Omit the entire heading and section" in prompt
 
 
 def test_faster_whisper_uninstall_removes_only_its_local_cache(tmp_path: Path) -> None:
