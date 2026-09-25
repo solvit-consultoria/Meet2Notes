@@ -34,6 +34,49 @@ class TrackAnalysis:
     sample_rate: int
 
 
+def resolve_capture_master_pair(
+    *, source_recording: Any, recordings: list[Any], meeting_id: int
+) -> tuple[Any, Any] | None:
+    """Resolve a verified microphone/system master pair for one original.
+
+    Older capture manifests may omit ``capture_sources`` on the original. The
+    per-track role, source kind, meeting ownership, and synchronized source ID
+    remain required and provide the provenance in that legacy schema.
+    """
+    if (
+        source_recording is None
+        or source_recording.meeting_id != meeting_id
+        or source_recording.role != "original"
+    ):
+        return None
+    manifest_sources = source_recording.metadata.get("capture_sources")
+    if isinstance(manifest_sources, list):
+        manifest_kinds = {
+            str(item.get("kind")) for item in manifest_sources if isinstance(item, dict)
+        }
+        if not {"microphone", "system"}.issubset(manifest_kinds):
+            return None
+
+    def matching_master(kind: str) -> Any | None:
+        role = f"master_{kind}"
+        matches = [
+            recording
+            for recording in recordings
+            if recording.meeting_id == meeting_id
+            and recording.role == role
+            and recording.metadata.get("synchronized_with_recording_id")
+            == source_recording.id
+            and recording.metadata.get("capture_source_kind") == kind
+        ]
+        return matches[-1] if matches else None
+
+    microphone = matching_master("microphone")
+    system = matching_master("system")
+    if microphone is None or system is None:
+        return None
+    return microphone, system
+
+
 def preview_source_track_attribution(
     *,
     segments: list[Any],

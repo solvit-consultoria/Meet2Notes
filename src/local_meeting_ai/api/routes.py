@@ -95,6 +95,7 @@ from local_meeting_ai.application.ai_services import (
 from local_meeting_ai.application.rag import RAG_DEFAULTS
 from local_meeting_ai.application.source_track_attribution import (
     preview_source_track_attribution,
+    resolve_capture_master_pair,
 )
 from local_meeting_ai.bootstrap import Container
 from local_meeting_ai.domain.enums import JobType
@@ -1391,38 +1392,16 @@ async def preview_transcription_source_track_attribution(
 
     recordings = container.recordings.list_for_meeting(transcription.meeting_id)
     source = container.recordings.get(source_recording_id)
-    source_kinds = {
-        str(item.get("kind"))
-        for item in (source.metadata.get("capture_sources", []) if source else [])
-        if isinstance(item, dict)
-    }
-    if (
-        source is None
-        or source.meeting_id != transcription.meeting_id
-        or source.role != "original"
-        or not {"microphone", "system"}.issubset(source_kinds)
-    ):
+    master_pair = resolve_capture_master_pair(
+        source_recording=source,
+        recordings=recordings,
+        meeting_id=transcription.meeting_id,
+    )
+    if master_pair is None:
         raise ValidationError(
             "This transcript is not linked to a verified microphone + system capture pair"
         )
-
-    def matching_master(role: str) -> Any | None:
-        matches = [
-            recording
-            for recording in recordings
-            if recording.role == role
-            and recording.metadata.get("synchronized_with_recording_id")
-            == source_recording_id
-            and recording.metadata.get("capture_source_kind") == role.removeprefix("master_")
-        ]
-        return matches[-1] if matches else None
-
-    microphone = matching_master("master_microphone")
-    system = matching_master("master_system")
-    if microphone is None or system is None:
-        raise ValidationError(
-            "The verified capture does not contain both synchronized microphone and system masters"
-        )
+    microphone, system = master_pair
 
     segments = container.transcriptions.segments(transcription_id)
     return await asyncio.to_thread(

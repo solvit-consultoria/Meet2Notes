@@ -10,6 +10,7 @@ import pytest
 
 from local_meeting_ai.application.source_track_attribution import (
     preview_source_track_attribution,
+    resolve_capture_master_pair,
 )
 
 
@@ -29,6 +30,67 @@ def _write_track(path: Path, active_windows: set[int]) -> tuple[str, int]:
 
 def _segment(index: int, start: int, end: int) -> SimpleNamespace:
     return SimpleNamespace(segment_index=index, start_ms=start, end_ms=end)
+
+
+def test_legacy_capture_without_source_manifest_resolves_exact_synced_masters() -> None:
+    original = SimpleNamespace(id=8, meeting_id=3, role="original", metadata={})
+    microphone = SimpleNamespace(
+        id=9,
+        meeting_id=3,
+        role="master_microphone",
+        metadata={
+            "synchronized_with_recording_id": 8,
+            "capture_source_kind": "microphone",
+        },
+    )
+    system = SimpleNamespace(
+        id=10,
+        meeting_id=3,
+        role="master_system",
+        metadata={
+            "synchronized_with_recording_id": 8,
+            "capture_source_kind": "system",
+        },
+    )
+
+    assert resolve_capture_master_pair(
+        source_recording=original,
+        recordings=[microphone, system],
+        meeting_id=3,
+    ) == (microphone, system)
+
+
+def test_source_pair_rejects_wrong_sync_or_inconsistent_present_manifest() -> None:
+    original = SimpleNamespace(
+        id=8,
+        meeting_id=3,
+        role="original",
+        metadata={"capture_sources": [{"kind": "microphone"}]},
+    )
+    microphone = SimpleNamespace(
+        id=9,
+        meeting_id=3,
+        role="master_microphone",
+        metadata={
+            "synchronized_with_recording_id": 8,
+            "capture_source_kind": "microphone",
+        },
+    )
+    system = SimpleNamespace(
+        id=10,
+        meeting_id=3,
+        role="master_system",
+        metadata={
+            "synchronized_with_recording_id": 7,
+            "capture_source_kind": "system",
+        },
+    )
+
+    assert resolve_capture_master_pair(
+        source_recording=original,
+        recordings=[microphone, system],
+        meeting_id=3,
+    ) is None
 
 
 def _preview(
