@@ -108,6 +108,8 @@
   let speakerSummaryDismissed = false;
   let activeSpeakerRebuildJobId = null;
   let speakerRebuildDismissed = false;
+  let sourcePreviewProfilesLoaded = false;
+  let sourcePreviewRunning = false;
   let pendingPostprocessKind = null;
   let pendingRememberSpeakerId = null;
   let editingSummaryId = null;
@@ -1114,6 +1116,8 @@
   function renderSpeakerPanel(detail = lastDetail || {}) {
     const container = document.querySelector("#speaker-results");
     const status = document.querySelector("#speaker-result-status");
+    void loadSourcePreviewProfiles();
+    syncSourcePreviewControls();
     document.querySelector("#speaker-rebuild-identification").disabled =
       Boolean(activeSpeakerRebuildJobId)
       || !activeTranscriptionId
@@ -1165,6 +1169,115 @@
     container.innerHTML = `
       <div class="speaker-overview-grid">${cards}</div>`;
     applyAudioAvailability();
+  }
+
+  async function loadSourcePreviewProfiles() {
+    if (sourcePreviewProfilesLoaded) return;
+    sourcePreviewProfilesLoaded = true;
+    try {
+      const profiles = await api("/api/speaker-profiles");
+      const datalist = document.querySelector("#source-preview-profile-names");
+      if (!datalist) return;
+      datalist.replaceChildren(...(profiles || []).map((profile) => {
+        const option = document.createElement("option");
+        option.value = String(profile.name || "");
+        return option;
+      }));
+    } catch {
+      // The name remains editable if profile suggestions are unavailable.
+    }
+  }
+
+  function syncSourcePreviewControls() {
+    const button = document.querySelector("#source-preview-run");
+    if (!button) return;
+    const transcriptionReady = lastDetail?.transcription?.status === "completed"
+      && Boolean(activeTranscriptionId);
+    const namesReady = Boolean(
+      document.querySelector("#source-preview-mic-name")?.value.trim()
+      && document.querySelector("#source-preview-system-name")?.value.trim(),
+    );
+    button.disabled = sourcePreviewRunning
+      || !transcriptionReady
+      || !document.querySelector("#source-preview-one-to-one")?.checked
+      || !document.querySelector("#source-preview-confirm-mapping")?.checked
+      || !namesReady;
+  }
+
+  const sourcePreviewReasonKeys = {
+    "Transcript timestamp is outside the source audio.": "speakers.source_reason_timestamp",
+    "No clear isolated source activity in this transcript interval.": "speakers.source_reason_no_activity",
+    "Both sources are active together; speaker is uncertain.": "speakers.source_reason_overlap",
+    "The interval contains activity from both speakers.": "speakers.source_reason_mixed",
+    "Source evidence is below the confidence threshold.": "speakers.source_reason_low_confidence",
+    "The microphone and system tracks do not share a verified capture source.": "speakers.source_reason_sync",
+    "The source track durations do not match; attribution is unknown.": "speakers.source_reason_duration_pair",
+    "A source track is missing its integrity record or file.": "speakers.source_reason_missing",
+    "Source track exceeds the safe analysis size limit.": "speakers.source_reason_too_large",
+    "A source track hash changed; attribution is unknown.": "speakers.source_reason_hash",
+    "The source tracks are not readable PCM WAV files.": "speakers.source_reason_wav",
+    "The source track duration metadata does not match the WAV files.": "speakers.source_reason_duration_file",
+    "The source WAV tracks are not aligned in sample rate and duration.": "speakers.source_reason_alignment",
+  };
+
+  function translateSourcePreviewReason(reason) {
+    const key = sourcePreviewReasonKeys[reason];
+    return key ? t(key) : reason;
+  }
+
+  async function runSourceTrackPreview() {
+    const button = document.querySelector("#source-preview-run");
+    const result = document.querySelector("#source-preview-result");
+    const micName = document.querySelector("#source-preview-mic-name").value.trim();
+    const systemName = document.querySelector("#source-preview-system-name").value.trim();
+    if (!activeTranscriptionId || !micName || !systemName) return;
+    sourcePreviewRunning = true;
+    syncSourcePreviewControls();
+    result.hidden = false;
+    result.textContent = t("speakers.source_preview_running");
+    try {
+      const preview = await api(
+        `/api/transcriptions/${activeTranscriptionId}/source-track-attribution/preview`,
+        {
+          method: "POST",
+          body: JSON.stringify({
+            confirm_one_to_one: document.querySelector("#source-preview-one-to-one").checked,
+            speaker_count: 2,
+            confirm_mapping: document.querySelector("#source-preview-confirm-mapping").checked,
+            microphone_speaker: micName,
+            system_speaker: systemName,
+          }),
+        },
+      );
+      const rows = preview.segments || [];
+      const assignedCount = rows.filter((row) => row.speaker).length;
+      const unknownCount = rows.length - assignedCount;
+      const reasons = new Map();
+      for (const row of rows) {
+        if (row.reason) reasons.set(row.reason, (reasons.get(row.reason) || 0) + 1);
+      }
+      const reasonSummary = [...reasons.entries()].map(([reason, count]) =>
+        `<li>${escapeHTML(translateSourcePreviewReason(reason))} · ${count}</li>`).join("");
+      const visibleRows = rows.slice(0, 80);
+      const items = visibleRows.map((row) => {
+        const speaker = row.speaker || t("speakers.source_preview_unknown");
+        const reason = row.reason ? ` · ${translateSourcePreviewReason(row.reason)}` : "";
+        return `<li>${escapeHTML(formatTimestamp(row.start_ms))} · ${escapeHTML(speaker)}${escapeHTML(reason)}</li>`;
+      }).join("");
+      result.innerHTML = `
+        <strong>${escapeHTML(t("speakers.source_preview_counts", { assigned: assignedCount, unknown: unknownCount }))}</strong>
+        <p>${escapeHTML(t("speakers.source_preview_read_only"))}</p>
+        ${preview.warning ? `<p>${escapeHTML(translateSourcePreviewReason(preview.warning))}</p>` : ""}
+        ${reasonSummary ? `<strong>${escapeHTML(t("speakers.source_preview_reasons"))}</strong><ul>${reasonSummary}</ul>` : ""}
+        ${rows.length > visibleRows.length ? `<p>${escapeHTML(t("speakers.source_preview_limited", { shown: visibleRows.length, total: rows.length }))}</p>` : ""}
+        <ul>${items || `<li>${escapeHTML(t("speakers.source_preview_no_segments"))}</li>`}</ul>`;
+    } catch (error) {
+      result.textContent = error.message || t("speakers.source_preview_error");
+    } finally {
+      sourcePreviewRunning = false;
+      syncSourcePreviewControls();
+      button.textContent = t("speakers.source_preview_run");
+    }
   }
 
   function showSpeakerSummary(speaker, job = null) {
@@ -3178,6 +3291,15 @@
   document.querySelector("#ai-save-notes").addEventListener("click", saveAiNotes);
   document.querySelector("#ai-toggle-view").addEventListener("click", toggleAiNotesView);
   document.querySelector("#speaker-rebuild-identification").addEventListener("click", openSpeakerRebuildDialog);
+  document.querySelector("#source-preview-run").addEventListener("click", runSourceTrackPreview);
+  [
+    "#source-preview-one-to-one",
+    "#source-preview-confirm-mapping",
+    "#source-preview-mic-name",
+    "#source-preview-system-name",
+  ].forEach((selector) => document.querySelector(selector).addEventListener("input", syncSourcePreviewControls));
+  ["#source-preview-one-to-one", "#source-preview-confirm-mapping"].forEach((selector) =>
+    document.querySelector(selector).addEventListener("change", syncSourcePreviewControls));
   document.querySelectorAll('input[name="speaker-rebuild-mode"]').forEach((input) =>
     input.addEventListener("change", syncSpeakerRebuildControls));
   document.querySelector("#speaker-rebuild-confirm").addEventListener("click", startSpeakerRebuild);

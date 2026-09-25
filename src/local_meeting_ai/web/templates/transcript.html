@@ -208,6 +208,21 @@
           <span class="result-status" id="speaker-result-status">Waiting</span>
         </div>
       </header>
+      <section class="source-attribution-card" aria-labelledby="source-attribution-title">
+        <div class="source-attribution-copy">
+          <h3 id="source-attribution-title" data-i18n="speakers.source_preview_title">Experimental 1:1 source-track preview</h3>
+          <p data-i18n="speakers.source_preview_help">Uses only the existing transcript timestamps and separate microphone/system tracks. This preview does not change speaker labels.</p>
+        </div>
+        <label class="source-attribution-confirm"><input id="source-preview-one-to-one" type="checkbox"><span data-i18n="speakers.source_preview_one_to_one">I confirm this was a one-to-one call with exactly 2 speakers.</span></label>
+        <div class="source-attribution-fields">
+          <label><span data-i18n="speakers.source_preview_mic_label">Microphone track · local speaker</span><input id="source-preview-mic-name" type="text" list="source-preview-profile-names" maxlength="80" autocomplete="off" data-i18n-placeholder="speakers.source_preview_mic_placeholder" placeholder="Choose or type a saved profile name"></label>
+          <datalist id="source-preview-profile-names"></datalist>
+          <label><span data-i18n="speakers.source_preview_system_label">System track · remote speaker</span><input id="source-preview-system-name" type="text" maxlength="80" autocomplete="off" data-i18n-placeholder="speakers.source_preview_remote_placeholder" placeholder="Type the other participant's name"></label>
+        </div>
+        <label class="source-attribution-confirm"><input id="source-preview-confirm-mapping" type="checkbox"><span data-i18n="speakers.source_preview_confirm_mapping">I confirm that these names match the microphone and system tracks.</span></label>
+        <div class="source-attribution-actions"><span data-i18n="speakers.source_preview_count">Speaker count: 2 (fixed)</span><button class="button secondary" id="source-preview-run" type="button" data-i18n="speakers.source_preview_run">Preview attribution</button></div>
+        <div id="source-preview-result" class="source-attribution-result" role="status" aria-live="polite" hidden></div>
+      </section>
       <div class="speaker-results" id="speaker-results"></div>
     </section>
 

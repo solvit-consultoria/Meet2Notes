@@ -64,6 +64,7 @@ from local_meeting_ai.api.schemas import (
     RagSearchRequest,
     RecordingResponse,
     SegmentUpdate,
+    SourceTrackAttributionPreviewRequest,
     SpeakerNameUpdate,
     SpeakerProfileResponse,
     SpeakerProfileUpdate,
@@ -92,6 +93,9 @@ from local_meeting_ai.application.ai_services import (
     configured_values,
 )
 from local_meeting_ai.application.rag import RAG_DEFAULTS
+from local_meeting_ai.application.source_track_attribution import (
+    preview_source_track_attribution,
+)
 from local_meeting_ai.bootstrap import Container
 from local_meeting_ai.domain.enums import JobType
 from local_meeting_ai.domain.errors import (
@@ -1340,6 +1344,104 @@ async def start_diarization(
         speaker_count=payload.speaker_count if payload else None,
     )
     return JobResponse.model_validate(job)
+
+
+@router.post("/transcriptions/{transcription_id}/source-track-attribution/preview")
+async def preview_transcription_source_track_attribution(
+    transcription_id: int,
+    container: ContainerDependency,
+    payload: SourceTrackAttributionPreviewRequest,
+) -> dict[str, Any]:
+    """Preview conservative two-person mic/system attribution without writes.
+
+    Sherpa diarization remains independent and opt-in. This endpoint requires
+    explicit 1:1 and track-to-person confirmations, verifies source provenance,
+    then returns candidates only; it never saves speaker assignments.
+    """
+    transcription = container.transcriptions.get(transcription_id)
+    if not transcription:
+        raise NotFoundError("Transcription not found")
+    if transcription.status != "completed":
+        raise ValidationError("Complete the transcription before source-track review")
+    if not payload.confirm_one_to_one or not payload.confirm_mapping:
+        raise ValidationError(
+            "Confirm that this is a one-to-one call and verify who used each source track"
+        )
+    if (
+        not payload.microphone_speaker.strip()
+        or not payload.system_speaker.strip()
+        or payload.microphone_speaker.strip().casefold()
+        == payload.system_speaker.strip().casefold()
+    ):
+        raise ValidationError("Choose two distinct speaker names for the source tracks")
+
+    source_recording_id: int | None = None
+    for job in container.jobs.list(meeting_id=transcription.meeting_id, limit=1000):
+        if (
+            job.job_type == JobType.TRANSCRIBE
+            and job.payload.get("transcription_id") == transcription_id
+            and isinstance(job.payload.get("recording_id"), int)
+        ):
+            source_recording_id = int(job.payload["recording_id"])
+            break
+    if source_recording_id is None:
+        raise ValidationError(
+            "The transcript does not have a verifiable source recording for this preview"
+        )
+
+    recordings = container.recordings.list_for_meeting(transcription.meeting_id)
+    source = container.recordings.get(source_recording_id)
+    source_kinds = {
+        str(item.get("kind"))
+        for item in (source.metadata.get("capture_sources", []) if source else [])
+        if isinstance(item, dict)
+    }
+    if (
+        source is None
+        or source.meeting_id != transcription.meeting_id
+        or source.role != "original"
+        or not {"microphone", "system"}.issubset(source_kinds)
+    ):
+        raise ValidationError(
+            "This transcript is not linked to a verified microphone + system capture pair"
+        )
+
+    def matching_master(role: str) -> Any | None:
+        matches = [
+            recording
+            for recording in recordings
+            if recording.role == role
+            and recording.metadata.get("synchronized_with_recording_id")
+            == source_recording_id
+            and recording.metadata.get("capture_source_kind") == role.removeprefix("master_")
+        ]
+        return matches[-1] if matches else None
+
+    microphone = matching_master("master_microphone")
+    system = matching_master("master_system")
+    if microphone is None or system is None:
+        raise ValidationError(
+            "The verified capture does not contain both synchronized microphone and system masters"
+        )
+
+    segments = container.transcriptions.segments(transcription_id)
+    return await asyncio.to_thread(
+        preview_source_track_attribution,
+        segments=segments,
+        microphone_path=Path(microphone.local_path),
+        system_path=Path(system.local_path),
+        microphone_sha256=microphone.sha256 or "",
+        system_sha256=system.sha256 or "",
+        microphone_duration_ms=microphone.duration_ms,
+        system_duration_ms=system.duration_ms,
+        microphone_sync_id=microphone.metadata.get("synchronized_with_recording_id"),
+        system_sync_id=system.metadata.get("synchronized_with_recording_id"),
+        confirm_one_to_one=payload.confirm_one_to_one,
+        speaker_count=payload.speaker_count,
+        confirm_mapping=payload.confirm_mapping,
+        microphone_speaker=payload.microphone_speaker,
+        system_speaker=payload.system_speaker,
+    )
 
 
 @router.post(

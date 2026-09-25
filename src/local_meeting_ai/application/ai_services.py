@@ -38,6 +38,29 @@ from local_meeting_ai.plugins.manager import PluginManager
 
 from .speaker_text import speaker_turn_text
 
+MAX_DIARIZATION_SPEAKERS = 20
+
+
+def validate_diarization_speakers(
+    turns: list[Any], expected_speaker_count: int | None = None
+) -> int:
+    """Reject implausible diarization before it can overwrite transcript labels."""
+    speaker_count = len({turn.speaker for turn in turns})
+    if speaker_count > MAX_DIARIZATION_SPEAKERS:
+        raise ValidationError(
+            "Diarization detected "
+            f"{speaker_count} speakers, above the safety limit of "
+            f"{MAX_DIARIZATION_SPEAKERS}. No transcript labels were changed. "
+            "Review the audio and retry with a known participant count."
+        )
+    if expected_speaker_count is not None and speaker_count > expected_speaker_count:
+        raise ValidationError(
+            f"You requested {expected_speaker_count} speakers, but diarization "
+            f"detected {speaker_count}. No transcript labels were changed. "
+            "Check the participant count or retry with automatic detection."
+        )
+    return speaker_count
+
 logger = logging.getLogger(__name__)
 
 DIARIZATION_DEFAULTS: dict[str, Any] = {
@@ -261,8 +284,8 @@ class DiarizationService:
             "diarization",
             DIARIZATION_DEFAULTS,
         )
+        requested_speaker_count = job.payload.get("speaker_count")
         if "speaker_count" in job.payload:
-            requested_speaker_count = job.payload.get("speaker_count")
             config["num_speakers"] = (
                 requested_speaker_count
                 if isinstance(requested_speaker_count, int) and requested_speaker_count > 0
@@ -281,6 +304,15 @@ class DiarizationService:
             config,
             cast(ProgressReporter, progress),
             is_cancelled,
+        )
+        speaker_count = validate_diarization_speakers(
+            turns,
+            expected_speaker_count=(
+                requested_speaker_count
+                if isinstance(requested_speaker_count, int)
+                and requested_speaker_count > 0
+                else None
+            ),
         )
         recognized: dict[int, Any] = {}
         profiles = [item for item in self.speaker_profiles.list() if item.sample_path]
@@ -306,7 +338,7 @@ class DiarizationService:
         )
         return {
             "transcription_id": transcription.id,
-            "speaker_count": len({turn.speaker for turn in turns}),
+            "speaker_count": speaker_count,
             "turn_count": len(turns),
             "assigned_segments": assigned,
         }

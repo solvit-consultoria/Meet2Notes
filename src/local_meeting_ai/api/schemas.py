@@ -783,6 +783,18 @@ class DiarizationStartRequest(BaseModel):
     speaker_count: int | None = Field(default=None, ge=1, le=20)
 
 
+class SourceTrackAttributionPreviewRequest(BaseModel):
+    """Explicit confirmations for a read-only two-person source-track preview."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    confirm_one_to_one: bool
+    speaker_count: int = Field(ge=2, le=2)
+    confirm_mapping: bool
+    microphone_speaker: str = Field(min_length=1, max_length=80)
+    system_speaker: str = Field(min_length=1, max_length=80)
+
+
 class SummaryResponse(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
