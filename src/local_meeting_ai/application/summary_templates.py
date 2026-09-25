@@ -21,20 +21,31 @@ def _section(
 BUILTIN_SUMMARY_TEMPLATES: tuple[dict[str, Any], ...] = (
     {
         "name": "General Meeting",
-        "description": "A balanced summary with highlights, decisions and follow-up work.",
-        "system_prompt": "Create accurate, practical meeting notes without inventing facts.",
-        "user_prompt_template": "Turn the transcript into clear notes for the meeting participants.",
+        "description": "Resumo objetivo com tópicos, decisões, ações e pendências.",
+        "system_prompt": (
+            "Crie notas fiéis à reunião. Use o idioma predominante da transcrição; "
+            "para português, use português brasileiro. Não invente, não complete "
+            "lacunas por suposição e diferencie propostas de decisões confirmadas."
+        ),
+        "user_prompt_template": (
+            "Transforme a transcrição em notas claras e úteis para consultar depois. "
+            "Seja conciso, preserve nomes, números e siglas, reúna assuntos repetidos "
+            "e mantenha atribuições somente quando estiverem explícitas."
+        ),
         "sections": [
-            _section("Summary", "Summarize the purpose and main topics.", "paragraph"),
-            _section("Highlights", "List the most important points discussed."),
-            _section("Decisions", "List only decisions explicitly made."),
+            _section("Resumo", "Explique o objetivo e o resultado principal da conversa.", "paragraph"),
+            _section("Pontos principais", "Registre os temas e informações mais importantes."),
             _section(
-                "Action Items",
-                "List explicit tasks, owners and deadlines. Do not infer missing values.",
-                "list",
-                "| Task | Owner | Deadline |",
+                "Decisões",
+                "Inclua apenas decisões confirmadas pelos participantes. Não trate ideias ou sugestões como decisões.",
             ),
-            _section("Open Questions", "List unresolved questions and pending topics."),
+            _section(
+                "Ações combinadas",
+                "Liste tarefas explicitamente combinadas. Não deduza responsável nem prazo ausente.",
+                "list",
+                "| Ação | Responsável | Prazo |",
+            ),
+            _section("Pendências", "Liste dúvidas, dependências e assuntos que ficaram sem resolução."),
         ],
     },
     {
@@ -146,7 +157,8 @@ BUILTIN_SUMMARY_TEMPLATES: tuple[dict[str, Any], ...] = (
 def render_summary_template(template: dict[str, Any]) -> str:
     lines = [
         str(template.get("user_prompt_template") or "Create structured notes."),
-        "Use exactly the following Markdown sections, in this order:",
+        "Use these Markdown sections in this order. Write the headings and all content "
+        "in the language of the transcript; for Portuguese, use Brazilian Portuguese.",
     ]
     for section in template.get("sections", []):
         lines.extend(
@@ -159,7 +171,8 @@ def render_summary_template(template: dict[str, Any]) -> str:
         if section.get("item_format"):
             lines.append(f"Item format: {section['item_format']}")
     lines.append(
-        "If a section has no supporting information, write 'Not specified'. "
-        "Never infer owners, dates, decisions or facts."
+        "Omit sections unsupported by the transcript instead of adding 'not specified' "
+        "placeholders. Never infer owners, dates, decisions or facts. Treat proposals "
+        "as proposals unless participants explicitly agree on them."
     )
     return "\n".join(lines)

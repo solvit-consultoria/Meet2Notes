@@ -15,7 +15,10 @@ from local_meeting_ai.adapters.diarization.sherpa_onnx import (
 )
 from local_meeting_ai.adapters.summary.llama_cpp import LlamaCppSummaryEngine
 from local_meeting_ai.adapters.transcription.faster_whisper import FasterWhisperEngine
-from local_meeting_ai.application.summary_templates import render_summary_template
+from local_meeting_ai.application.summary_templates import (
+    BUILTIN_SUMMARY_TEMPLATES,
+    render_summary_template,
+)
 from local_meeting_ai.domain.entities import ModelProfile
 
 
@@ -163,6 +166,20 @@ def test_note_format_renders_an_ordered_grounded_prompt() -> None:
     assert "## Decisions" in prompt
     assert "Item format: | Decision | Owner |" in prompt
     assert "Never infer owners" in prompt
+
+
+def test_default_meeting_summary_uses_portuguese_and_separates_proposals_from_decisions() -> None:
+    template = next(
+        item for item in BUILTIN_SUMMARY_TEMPLATES if item["name"] == "General Meeting"
+    )
+    prompt = render_summary_template(template)
+
+    assert "## Resumo" in prompt
+    assert "## Decisões" in prompt
+    assert "## Ações combinadas" in prompt
+    assert "Brazilian Portuguese" in prompt
+    assert "Treat proposals as proposals" in prompt
+    assert "not specified" in prompt
 
 
 def test_faster_whisper_uninstall_removes_only_its_local_cache(tmp_path: Path) -> None:
