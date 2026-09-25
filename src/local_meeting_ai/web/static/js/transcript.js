@@ -66,6 +66,7 @@
   let preferences = {};
   let manualNotesTimer = null;
   let activeTranscriptionId = null;
+  let transcriptVisibleLimit = 100;
   let activeJob = null;
   let captureSession = null;
   let capturePollTimer = null;
@@ -967,10 +968,15 @@
       "hidden",
       speakers.length === 0,
     );
+    const searchQuery = document.querySelector("#transcript-search").value.trim().toLocaleLowerCase();
     let segments = [...detail.segments];
     if (speakerFilter.value !== "all") {
       segments = segments.filter((segment) =>
         String(segment.speaker_id) === speakerFilter.value);
+    }
+    if (searchQuery) {
+      segments = segments.filter((segment) =>
+        String(segment.text || "").toLocaleLowerCase().includes(searchQuery));
     }
     if (document.querySelector("#transcript-order").value === "speaker") {
       segments.sort((left, right) => {
@@ -983,7 +989,7 @@
     setTitle(transcription.title);
     renderMeetingResults(detail);
     document.querySelector("#editor-meta").textContent =
-      `${transcription.model} · ${transcription.language || Meet2Notes.t("transcript.detecting_language")} · ${segments.length} ${Meet2Notes.t("transcript.shown")} / ${detail.segments.length} ${Meet2Notes.t("transcript.segments")}${captureSession ? ` · ${Meet2Notes.t("transcript.live")}` : ""}`;
+      `${transcription.model} · ${transcription.language || Meet2Notes.t("transcript.detecting_language")} · ${Math.min(segments.length, transcriptVisibleLimit)} ${Meet2Notes.t("transcript.shown")} / ${detail.segments.length} ${Meet2Notes.t("transcript.segments")}${captureSession ? ` · ${Meet2Notes.t("transcript.live")}` : ""}`;
     if (!detail.segments.length) {
       if (["running", "queued"].includes(transcription.status)) {
         segmentContainer.innerHTML = `
@@ -1007,12 +1013,19 @@
     }
     const segmentsToRender = appendOnlyLiveUpdate
       ? segments.slice(previousDetail.segments.length)
-      : segments;
+      : segments.slice(0, transcriptVisibleLimit);
     const markup = segmentsToRender
       .map((segment) => segmentRowHtml(segment, speakerNames, speakerNumbers))
       .join("");
     if (appendOnlyLiveUpdate) segmentContainer.insertAdjacentHTML("beforeend", markup);
     else segmentContainer.innerHTML = markup;
+    if (!appendOnlyLiveUpdate && segments.length > segmentsToRender.length) {
+      const remaining = segments.length - segmentsToRender.length;
+      segmentContainer.insertAdjacentHTML("beforeend", `
+        <button type="button" class="button secondary transcript-load-more">
+          Carregar mais ${Math.min(100, remaining)} segmentos (${remaining} restantes)
+        </button>`);
+    }
     applySearch();
     applyAudioAvailability();
     if (captureSession) {
@@ -3187,11 +3200,22 @@
       toast(error.message, "error");
     }
   });
-  document.querySelector("#transcript-search").addEventListener("input", applySearch);
+  document.querySelector("#transcript-search").addEventListener("input", () => {
+    transcriptVisibleLimit = 100;
+    if (lastDetail) renderTranscript(lastDetail);
+  });
+  segmentContainer.addEventListener("click", (event) => {
+    const button = event.target.closest(".transcript-load-more");
+    if (!button || !lastDetail) return;
+    transcriptVisibleLimit += 100;
+    renderTranscript(lastDetail);
+  });
   document.querySelector("#transcript-speaker-filter").addEventListener("change", () => {
+    transcriptVisibleLimit = 100;
     if (lastDetail) renderTranscript(lastDetail);
   });
   document.querySelector("#transcript-order").addEventListener("change", () => {
+    transcriptVisibleLimit = 100;
     if (lastDetail) renderTranscript(lastDetail);
   });
   document.querySelectorAll("[data-meeting-tab]").forEach((button) =>
