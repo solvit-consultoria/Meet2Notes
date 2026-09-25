@@ -1614,7 +1614,10 @@
         container.textContent = markdownToPlainText(summary.content_markdown);
       }
     } else {
-      container.innerHTML = `<div class="result-empty"><strong>AI analysis is ${escapeHTML(summary.status)}</strong><span>The report will appear automatically.</span></div>`;
+      const summaryState = summary.status === "failed"
+        ? t("summary.status_failed")
+        : summary.status;
+      container.innerHTML = `<div class="result-empty"><strong>${escapeHTML(t("summary.empty_title", { status: summaryState }))}</strong><span>${escapeHTML(t("summary.empty_help"))}</span></div>`;
     }
   }
 

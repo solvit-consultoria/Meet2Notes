@@ -1715,5 +1715,8 @@
   "speakers.source_reason_hash": "A source track hash changed; attribution is unknown.",
   "speakers.source_reason_wav": "The source tracks are not readable PCM WAV files.",
   "speakers.source_reason_duration_file": "The source track duration metadata does not match the WAV files.",
-  "speakers.source_reason_alignment": "The source WAV tracks are not aligned in sample rate and duration."
+  "speakers.source_reason_alignment": "The source WAV tracks are not aligned in sample rate and duration.",
+  "summary.empty_title": "AI analysis is {status}",
+  "summary.empty_help": "The report will appear automatically.",
+  "summary.status_failed": "failed"
 }

@@ -1715,5 +1715,8 @@
   "speakers.source_reason_hash": "O hash de uma faixa mudou; a atribuição ficou não identificada.",
   "speakers.source_reason_wav": "As faixas não são arquivos WAV PCM legíveis.",
   "speakers.source_reason_duration_file": "A duração registrada não corresponde à duração do arquivo WAV.",
-  "speakers.source_reason_alignment": "As faixas WAV não estão alinhadas em frequência de amostragem e duração."
+  "speakers.source_reason_alignment": "As faixas WAV não estão alinhadas em frequência de amostragem e duração.",
+  "summary.empty_title": "A análise com IA está {status}",
+  "summary.empty_help": "O relatório aparecerá automaticamente.",
+  "summary.status_failed": "com falha"
 }

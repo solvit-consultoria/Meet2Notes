@@ -1716,5 +1716,8 @@
   "speakers.source_reason_hash": "Cambió el hash de una pista; la atribución queda sin identificar.",
   "speakers.source_reason_wav": "Las pistas no son archivos WAV PCM legibles.",
   "speakers.source_reason_duration_file": "La duración registrada no coincide con la del archivo WAV.",
-  "speakers.source_reason_alignment": "Las pistas WAV no están alineadas en frecuencia de muestreo y duración."
+  "speakers.source_reason_alignment": "Las pistas WAV no están alineadas en frecuencia de muestreo y duración.",
+  "summary.empty_title": "El análisis de IA está {status}",
+  "summary.empty_help": "El informe aparecerá automáticamente.",
+  "summary.status_failed": "fallido"
 }
