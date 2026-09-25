@@ -989,7 +989,12 @@
         return leftName.localeCompare(rightName) || left.start_ms - right.start_ms;
       });
     }
-    const paragraphs = groupTranscriptSegments(segments, speakerNames, speakerNumbers);
+    const paragraphs = groupTranscriptSegments(
+      segments,
+      speakerNames,
+      speakerNumbers,
+      document.querySelector("#transcript-order").value === "time",
+    );
     setTitle(transcription.title);
     renderMeetingResults(detail);
     document.querySelector("#editor-meta").textContent =
@@ -1051,18 +1056,48 @@
     }
   }
 
-  function groupTranscriptSegments(segments, speakerNames, speakerNumbers) {
+  function groupTranscriptSegments(
+    segments,
+    speakerNames,
+    speakerNumbers,
+    chronological = false,
+  ) {
     const groups = [];
-    for (const segment of segments) {
+    let previousGroupSegmentCount = 0;
+    const orderedSegments = chronological
+      ? [...segments].sort((left, right) =>
+        Number(left.start_ms) - Number(right.start_ms)
+        || Number(left.end_ms) - Number(right.end_ms)
+        || Number(left.segment_index) - Number(right.segment_index))
+      : segments;
+    for (const segment of orderedSegments) {
       const text = String(segment.text || "").trim();
       if (!text) continue;
-      const speakerId = segment.speaker_id === null ? null : Number(segment.speaker_id);
+      const speakerId = segment.speaker_id === null || segment.speaker_id === undefined
+        ? null
+        : Number(segment.speaker_id);
       const previous = groups[groups.length - 1];
       const gapMs = previous ? Number(segment.start_ms) - previous.endMs : 0;
-      if (previous && previous.speakerId === speakerId && gapMs <= 3000
-          && previous.text.length + text.length <= 600) {
+      const knownSpeakerBlockIsContinuous = speakerId !== null
+        && previous
+        && previous.speakerId === speakerId
+        && gapMs >= 0
+        && gapMs <= 3000
+        && Number(segment.end_ms) - previous.startMs <= 30000
+        && previous.text.length + text.length <= 600;
+      const unknownBlockIsShort = speakerId === null
+        && previous
+        && previous.speakerId === null
+        && previousGroupSegmentCount < 3
+        && gapMs >= 0
+        && gapMs <= 800
+        && Number(segment.end_ms) - previous.startMs <= 12000
+        && previous.text.length + text.length <= 180
+        && !/[.!?…]["'”’)]*$/u.test(previous.text);
+      if (knownSpeakerBlockIsContinuous || unknownBlockIsShort) {
         previous.text += ` ${text}`;
         previous.endMs = Number(segment.end_ms);
+        previousGroupSegmentCount += 1;
       } else {
         groups.push({
           speakerId,
@@ -1074,9 +1109,10 @@
           quality: segment.metadata?.timestamp_quality || "recorded",
           text,
         });
+        previousGroupSegmentCount = 1;
       }
     }
-    if (document.querySelector("#transcript-order").value === "speaker") {
+    if (!chronological && document.querySelector("#transcript-order").value === "speaker") {
       groups.sort((left, right) =>
         left.speaker.localeCompare(right.speaker) || left.startMs - right.startMs);
     }
@@ -1663,7 +1699,14 @@
   }
 
   function syncSpeakerRebuildControls() {
-    const known = document.querySelector('input[name="speaker-rebuild-mode"]:checked')?.value === "known";
+    const useSynchronizedMasters = document.querySelector("#speaker-rebuild-use-source-tracks").checked;
+    const knownMode = document.querySelector('input[name="speaker-rebuild-mode"][value="known"]');
+    if (useSynchronizedMasters) {
+      document.querySelector('input[name="speaker-rebuild-mode"][value="auto"]').checked = true;
+    }
+    knownMode.disabled = useSynchronizedMasters;
+    const known = !useSynchronizedMasters
+      && document.querySelector('input[name="speaker-rebuild-mode"]:checked')?.value === "known";
     document.querySelector("#speaker-rebuild-count").disabled = !known;
   }
 
@@ -1679,6 +1722,7 @@
     speakerRebuildDismissed = false;
     document.querySelector('input[name="speaker-rebuild-mode"][value="auto"]').checked = true;
     document.querySelector("#speaker-rebuild-count").value = "2";
+    document.querySelector("#speaker-rebuild-use-source-tracks").checked = false;
     document.querySelector("#speaker-rebuild-options").hidden = false;
     document.querySelector("#speaker-rebuild-progress-view").hidden = true;
     document.querySelector("#speaker-rebuild-done").hidden = true;
@@ -1728,7 +1772,10 @@
     try {
       const job = await api(`/api/transcriptions/${activeTranscriptionId}/diarize`, {
         method: "POST",
-        body: JSON.stringify({ speaker_count: known ? requestedCount : null }),
+        body: JSON.stringify({
+          speaker_count: known ? requestedCount : null,
+          use_synchronized_masters: document.querySelector("#speaker-rebuild-use-source-tracks").checked,
+        }),
       });
       activeSpeakerRebuildJobId = job.uuid;
       document.querySelector("#speaker-rebuild-identification").disabled = true;
@@ -2839,7 +2886,12 @@
     if (layout === "speaker" && speakers) {
       const speakerNumbers = new Map((lastDetail?.speakers || []).map((speaker, index) =>
         [Number(speaker.id), index + 1]));
-      return groupTranscriptSegments(segments, speakerMap, speakerNumbers)
+      return groupTranscriptSegments(
+        segments,
+        speakerMap,
+        speakerNumbers,
+        true,
+      )
         .map((group) => {
           const timestamp = group.quality === "unavailable"
             ? ""
@@ -3171,6 +3223,7 @@
   document.querySelector("#speaker-rebuild-identification").addEventListener("click", openSpeakerRebuildDialog);
   document.querySelectorAll('input[name="speaker-rebuild-mode"]').forEach((input) =>
     input.addEventListener("change", syncSpeakerRebuildControls));
+  document.querySelector("#speaker-rebuild-use-source-tracks").addEventListener("change", syncSpeakerRebuildControls);
   document.querySelector("#speaker-rebuild-confirm").addEventListener("click", startSpeakerRebuild);
   document.querySelectorAll("#speaker-rebuild-close, #speaker-rebuild-cancel, #speaker-rebuild-background, #speaker-rebuild-done").forEach((button) =>
     button.addEventListener("click", () => {

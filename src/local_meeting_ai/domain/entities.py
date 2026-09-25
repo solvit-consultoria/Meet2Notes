@@ -282,6 +282,7 @@ class DiarizationSegment:
     start_ms: int
     end_ms: int
     speaker: int
+    source_role: str | None = None
 
 
 @dataclass(frozen=True, slots=True)

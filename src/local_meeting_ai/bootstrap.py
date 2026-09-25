@@ -338,6 +338,7 @@ def build_container(
         queue=queue,
         speaker_profiles=speaker_profiles,
         profile_matcher=profile_matcher,
+        normalizer=ffmpeg,
     )
     resolved_summary = summary_engine or SummaryEngineRouter(
         provider_registry,

@@ -1212,15 +1212,19 @@ class TranscriptionRepository:
         transcription_id: int,
         diarization: Sequence[DiarizationSegment],
         minimum_overlap_ratio: float,
-        recognized_profiles: dict[int, SpeakerProfile] | None = None,
+        recognized_profiles: dict[Any, SpeakerProfile] | None = None,
     ) -> int:
-        speaker_numbers = sorted({item.speaker for item in diarization})
+        speaker_keys = sorted(
+            {(item.source_role, item.speaker) for item in diarization},
+            key=lambda item: (item[0] or "", item[1]),
+        )
         with self.database.transaction() as connection:
             existing_speakers = {
                 str(row["stable_key"]): row
                 for row in connection.execute(
                     """
-                    SELECT stable_key, display_name, summary_status, summary_markdown,
+                    SELECT id, stable_key, display_name, profile_id,
+                           summary_status, summary_markdown,
                            summary_provider, summary_model, summary_updated_at
                     FROM speakers
                     WHERE meeting_id = ? AND stable_key LIKE 'diarization:%'
@@ -1233,43 +1237,54 @@ class TranscriptionRepository:
                 (transcription_id,),
             )
             connection.execute(
-                "DELETE FROM speakers WHERE meeting_id = ? AND stable_key LIKE 'diarization:%'",
-                (meeting_id,),
+                "UPDATE transcript_segments SET speaker_id = NULL WHERE transcription_id = ?",
+                (transcription_id,),
             )
-            speaker_ids: dict[int, int] = {}
-            for number in speaker_numbers:
-                stable_key = f"diarization:{number}"
-                existing = existing_speakers.get(stable_key)
-                profile = (recognized_profiles or {}).get(number)
-                cursor = connection.execute(
-                    """
-                    INSERT INTO speakers(
-                        meeting_id, stable_key, display_name, profile_id, created_at,
-                        summary_status, summary_markdown, summary_provider,
-                        summary_model, summary_updated_at
-                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-                    """,
-                    (
-                        meeting_id,
-                        stable_key,
-                        profile.name
-                        if profile
-                        else (
-                            str(existing["display_name"])
-                            if existing
-                            else f"Speaker {number + 1}"
-                        ),
-                        profile.id if profile else None,
-                        utc_now(),
-                        existing["summary_status"] if existing else None,
-                        existing["summary_markdown"] if existing else None,
-                        existing["summary_provider"] if existing else None,
-                        existing["summary_model"] if existing else None,
-                        existing["summary_updated_at"] if existing else None,
-                    ),
+            speaker_ids: dict[tuple[str | None, int], int] = {}
+            for source_role, number in speaker_keys:
+                stable_key = (
+                    f"diarization:{source_role}:{number}"
+                    if source_role
+                    else f"diarization:{number}"
                 )
-                assert cursor.lastrowid is not None
-                speaker_ids[number] = cursor.lastrowid
+                existing = existing_speakers.get(stable_key)
+                profile = (recognized_profiles or {}).get(
+                    (source_role, number)
+                ) or (recognized_profiles or {}).get(number)
+                if existing:
+                    if profile:
+                        automatic_name = _diarization_speaker_name(source_role, number)
+                        connection.execute(
+                            """
+                            UPDATE speakers
+                            SET profile_id = COALESCE(profile_id, ?),
+                                display_name = CASE
+                                    WHEN display_name = ? THEN ? ELSE display_name
+                                END
+                            WHERE id = ?
+                            """,
+                            (profile.id, automatic_name, profile.name, existing["id"]),
+                        )
+                    speaker_ids[(source_role, number)] = int(existing["id"])
+                else:
+                    cursor = connection.execute(
+                        """
+                        INSERT INTO speakers(
+                            meeting_id, stable_key, display_name, profile_id, created_at,
+                            summary_status, summary_markdown, summary_provider,
+                            summary_model, summary_updated_at
+                        ) VALUES (?, ?, ?, ?, ?, NULL, NULL, NULL, NULL, NULL)
+                        """,
+                        (
+                            meeting_id, stable_key,
+                            profile.name
+                            if profile
+                            else _diarization_speaker_name(source_role, number),
+                            profile.id if profile else None, utc_now(),
+                        ),
+                    )
+                    assert cursor.lastrowid is not None
+                    speaker_ids[(source_role, number)] = cursor.lastrowid
 
             connection.executemany(
                 """
@@ -1282,7 +1297,7 @@ class TranscriptionRepository:
                     (
                         meeting_id,
                         transcription_id,
-                        speaker_ids[turn.speaker],
+                        speaker_ids[(turn.source_role, turn.speaker)],
                         turn.start_ms,
                         turn.end_ms,
                         utc_now(),
@@ -1300,26 +1315,50 @@ class TranscriptionRepository:
                 (transcription_id,),
             ).fetchall()
             assignments: list[tuple[int, int]] = []
+            source_track_mode = any(turn.source_role for turn in diarization)
             for row in rows:
                 duration = max(1, int(row["end_ms"]) - int(row["start_ms"]))
-                overlaps: dict[int, int] = {}
+                overlaps: dict[tuple[str | None, int], int] = {}
                 for turn in diarization:
                     overlap = max(
                         0,
                         min(int(row["end_ms"]), turn.end_ms)
                         - max(int(row["start_ms"]), turn.start_ms),
                     )
-                    overlaps[turn.speaker] = overlaps.get(turn.speaker, 0) + overlap
+                    key = (turn.source_role, turn.speaker)
+                    overlaps[key] = overlaps.get(key, 0) + overlap
                 if not overlaps:
                     continue
-                speaker, overlap = max(overlaps.items(), key=lambda item: item[1])
-                if overlap / duration >= minimum_overlap_ratio:
-                    assignments.append((speaker_ids[speaker], int(row["id"])))
+                ranked = sorted(overlaps.items(), key=lambda item: item[1], reverse=True)
+                (speaker_key, overlap) = ranked[0]
+                second_overlap = ranked[1][1] if len(ranked) > 1 else 0
+                clearly_dominant = (
+                    not source_track_mode or second_overlap < overlap * 0.8
+                )
+                if overlap / duration >= minimum_overlap_ratio and clearly_dominant:
+                    assignments.append((speaker_ids[speaker_key], int(row["id"])))
             connection.executemany(
                 "UPDATE transcript_segments SET speaker_id = ? WHERE id = ?",
                 assignments,
             )
+            connection.execute(
+                """
+                DELETE FROM speakers
+                WHERE meeting_id = ? AND stable_key LIKE 'diarization:%'
+                  AND id NOT IN (SELECT DISTINCT speaker_id FROM speaker_turns)
+                """,
+                (meeting_id,),
+            )
         return len(assignments)
+
+
+def _diarization_speaker_name(source_role: str | None, number: int) -> str:
+    """Return a provisional label; cluster numbers alone are not identity evidence."""
+    if source_role == "master_microphone":
+        return f"Microfone — Falante {number + 1}"
+    if source_role == "master_system":
+        return f"Áudio do sistema — Falante {number + 1}"
+    return f"Speaker {number + 1}"
 
 
 class SpeakerProfileRepository:

@@ -781,6 +781,7 @@ class DiarizationStartRequest(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     speaker_count: int | None = Field(default=None, ge=1, le=20)
+    use_synchronized_masters: bool = False
 
 
 class SummaryResponse(BaseModel):

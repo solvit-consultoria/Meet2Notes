@@ -594,6 +594,12 @@
         <label><input type="radio" name="speaker-rebuild-mode" value="known"> I know the number</label>
         <input id="speaker-rebuild-count" type="number" min="1" max="20" value="2" inputmode="numeric" disabled aria-label="Known number of speakers">
       </fieldset>
+      <div class="speaker-rebuild-choice speaker-rebuild-source-tracks">
+        <label for="speaker-rebuild-use-source-tracks">
+          <input id="speaker-rebuild-use-source-tracks" type="checkbox">
+          Testar usando as faixas separadas (microfone + áudio do sistema). Pode levar mais tempo; o número de vozes será estimado por faixa.
+        </label>
+      </div>
       <div class="modal-actions">
         <button class="button secondary" id="speaker-rebuild-cancel" type="button">Cancel</button>
         <button class="button primary" id="speaker-rebuild-confirm" type="button">Rebuild identification</button>

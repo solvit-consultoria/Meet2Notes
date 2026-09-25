@@ -1864,6 +1864,16 @@
   border: 0;
 }
 
+.speaker-rebuild-source-tracks {
+  display: block;
+  margin-top: 12px;
+}
+
+.speaker-rebuild-source-tracks label {
+  justify-content: flex-start;
+  line-height: 1.45;
+}
+
 .speaker-rebuild-choice legend {
   grid-column: 1 / -1;
   margin-bottom: 4px;

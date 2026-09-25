@@ -1,18 +1,20 @@
 from __future__ import annotations
 
 import logging
+import tempfile
 from copy import deepcopy
 from pathlib import Path
 from typing import Any, cast
 
-from local_meeting_ai.domain.entities import Job, Summary, SummaryTemplate
-from local_meeting_ai.domain.enums import JobType
+from local_meeting_ai.domain.entities import Job, Recording, Summary, SummaryTemplate
+from local_meeting_ai.domain.enums import JobStatus, JobType
 from local_meeting_ai.domain.errors import (
     CapabilityUnavailableError,
     NotFoundError,
     ValidationError,
 )
 from local_meeting_ai.domain.protocols import (
+    AudioNormalizer,
     DiarizationEngine,
     ProgressReporter,
     SpeakerProfileMatcher,
@@ -129,6 +131,7 @@ class DiarizationService:
         queue: LocalJobQueue,
         speaker_profiles: SpeakerProfileRepository,
         profile_matcher: SpeakerProfileMatcher | None = None,
+        normalizer: AudioNormalizer | None = None,
     ) -> None:
         self.engine = engine
         self.recordings = recordings
@@ -138,6 +141,7 @@ class DiarizationService:
         self.queue = queue
         self.speaker_profiles = speaker_profiles
         self.profile_matcher = profile_matcher
+        self.normalizer = normalizer
 
     def capability(self) -> dict[str, Any]:
         capability = self.engine.capability()
@@ -213,20 +217,44 @@ class DiarizationService:
         speaker_count: int | None = None,
         postprocess_options: dict[str, Any] | None = None,
         postprocess: bool = False,
+        use_synchronized_masters: bool = False,
     ) -> Job:
         transcription = self.transcriptions.get(transcription_id)
         if not transcription:
             raise NotFoundError("Transcription not found")
         if transcription.status != "completed":
             raise ValidationError("Complete the transcription before diarization")
-        normalized = self.recordings.latest_for_role(
-            transcription.meeting_id,
-            "normalized",
-        )
+        if use_synchronized_masters and speaker_count is not None:
+            raise ValidationError(
+                "Master-track diarization requires automatic speaker counts per track"
+            )
+        if use_synchronized_masters:
+            normalized = resolve_transcription_normalized(
+                transcription.id,
+                transcription.meeting_id,
+                self.jobs,
+                self.recordings,
+            )
+        else:
+            normalized = self.recordings.latest_for_role(
+                transcription.meeting_id,
+                "normalized",
+            )
         if not normalized:
             raise ValidationError(
                 "The normalized transcription audio is not available"
             )
+        source_recordings: list[Recording] = []
+        if use_synchronized_masters:
+            source_recordings = list(
+                select_synchronized_masters(
+                    normalized, self.recordings.list_for_meeting(transcription.meeting_id)
+                )
+            )
+            if not self.normalizer:
+                raise CapabilityUnavailableError(
+                    "Audio normalization is unavailable for master-track diarization"
+                )
         capability = self.capability()
         if not capability.get("available") or not capability.get("installed"):
             raise CapabilityUnavailableError(
@@ -241,6 +269,8 @@ class DiarizationService:
                 "postprocess": postprocess,
                 "postprocess_options": postprocess_options or {},
                 "speaker_count": speaker_count,
+                "use_synchronized_masters": use_synchronized_masters,
+                "source_recording_ids": [item.id for item in source_recordings],
             },
             message="Waiting to identify speakers",
         )
@@ -268,6 +298,9 @@ class DiarizationService:
                 if isinstance(requested_speaker_count, int) and requested_speaker_count > 0
                 else -1
             )
+        if job.payload.get("use_synchronized_masters") is True:
+            # Cluster labels are local to each independently processed track.
+            config["num_speakers"] = -1
 
         def is_cancelled() -> bool:
             current = self.jobs.get(job.uuid)
@@ -276,26 +309,87 @@ class DiarizationService:
         def progress(value: float, message: str) -> None:
             self.jobs.update_progress(job.uuid, value * 0.9, message)
 
-        turns = await self.engine.diarize(
-            Path(recording.local_path),
-            config,
-            cast(ProgressReporter, progress),
-            is_cancelled,
-        )
-        recognized: dict[int, Any] = {}
+        use_masters = job.payload.get("use_synchronized_masters") is True
+        recognized: dict[Any, Any] = {}
         profiles = [item for item in self.speaker_profiles.list() if item.sample_path]
-        if (
-            config["recognize_saved_speakers"]
-            and self.profile_matcher is not None
-            and profiles
-        ):
-            await context.update(0.91, "Matching saved voice profiles")
-            recognized = await self.profile_matcher.match(
-                Path(recording.local_path),
-                turns,
-                profiles,
-                config,
+        if use_masters:
+            if not self.normalizer:
+                raise CapabilityUnavailableError(
+                    "Audio normalization is unavailable for master-track diarization"
+                )
+            source_ids = job.payload.get("source_recording_ids")
+            if not isinstance(source_ids, list) or len(source_ids) != 2:
+                raise ValidationError("Master-track diarization payload is incomplete")
+            roles = ("master_microphone", "master_system")
+            recordings = [self.recordings.get(value) for value in source_ids]
+            if any(item is None for item in recordings):
+                raise NotFoundError("A synchronized audio track no longer exists")
+            turns = []
+            with tempfile.TemporaryDirectory(prefix="meet2notes-diarization-") as temp_dir:
+                for index, (role, source) in enumerate(zip(roles, recordings, strict=True)):
+                    assert source is not None
+                    if source.role != role or source.meeting_id != transcription.meeting_id:
+                        raise ValidationError(
+                            "A synchronized audio track does not match the requested source"
+                        )
+                    if (
+                        source.metadata.get("synchronized_with_recording_id")
+                        != recording.metadata.get("source_recording_id")
+                        or source.duration_ms != recording.duration_ms
+                    ):
+                        raise ValidationError(
+                            f"Audio track {role} is no longer aligned with the normalized source"
+                        )
+                    await context.raise_if_cancelled()
+                    normalized_path = Path(temp_dir) / f"{role}.wav"
+                    await context.update(index * 0.44 + 0.02, f"Normalizing {role}")
+                    await self.normalizer.normalize_for_transcription(
+                        Path(source.local_path), normalized_path,
+                        sample_rate=16000, channels=1, is_cancelled=is_cancelled,
+                    )
+                    await context.raise_if_cancelled()
+                    await context.update(0.04 + index * 0.44, f"Diarizing {role}")
+                    track_turns = await self.engine.diarize(
+                        normalized_path,
+                        config,
+                        lambda value, message, base=index, track_role=role: (
+                            self.jobs.update_progress(
+                                job.uuid,
+                                0.04 + base * 0.44 + value * 0.40,
+                                f"{track_role}: {message}",
+                            )
+                        ),
+                        is_cancelled,
+                    )
+                    turns.extend(
+                        type(turn)(turn.start_ms, turn.end_ms, turn.speaker, role)
+                        for turn in track_turns
+                    )
+                    if config["recognize_saved_speakers"] and self.profile_matcher and profiles:
+                        await context.update(
+                            0.45 + index * 0.44,
+                            f"Matching saved speakers in {role}",
+                        )
+                        matches = await self.profile_matcher.match(
+                            normalized_path, track_turns, profiles, config
+                        )
+                        recognized.update(
+                            {
+                                (role, speaker): profile
+                                for speaker, profile in matches.items()
+                            }
+                        )
+                    await context.raise_if_cancelled()
+        else:
+            turns = await self.engine.diarize(
+                Path(recording.local_path), config,
+                cast(ProgressReporter, progress), is_cancelled,
             )
+            if config["recognize_saved_speakers"] and self.profile_matcher and profiles:
+                await context.update(0.91, "Matching saved voice profiles")
+                recognized = await self.profile_matcher.match(
+                    Path(recording.local_path), turns, profiles, config
+                )
         await context.update(0.94, "Assigning speakers to transcript segments")
         assigned = self.transcriptions.assign_diarization(
             meeting_id=transcription.meeting_id,
@@ -306,10 +400,93 @@ class DiarizationService:
         )
         return {
             "transcription_id": transcription.id,
-            "speaker_count": len({turn.speaker for turn in turns}),
+            "speaker_count": len({(turn.source_role, turn.speaker) for turn in turns}),
             "turn_count": len(turns),
             "assigned_segments": assigned,
+            "source_roles": sorted({turn.source_role for turn in turns if turn.source_role}),
         }
+
+
+def select_synchronized_masters(
+    normalized: Recording,
+    recordings: list[Recording],
+) -> tuple[Recording, Recording]:
+    """Select masters linked to this normalized source and validate their alignment."""
+    source_id = normalized.metadata.get("source_recording_id")
+    if not isinstance(source_id, int):
+        raise ValidationError("The normalized audio has no source recording link")
+    selected: list[Recording] = []
+    for role in ("master_microphone", "master_system"):
+        matches = [
+            item for item in recordings
+            if item.role == role
+            and item.metadata.get("synchronized_with_recording_id") == source_id
+        ]
+        if not matches:
+            raise ValidationError(f"Synchronized audio track {role} is unavailable")
+        master = max(matches, key=lambda item: (item.created_at, item.id))
+        if master.meeting_id != normalized.meeting_id:
+            raise ValidationError(f"Audio track {role} does not match the requested source")
+        if not master.duration_ms or master.duration_ms != normalized.duration_ms:
+            raise ValidationError(f"Audio track {role} is not aligned with the normalized source")
+        if not Path(master.local_path).is_file():
+            raise ValidationError(f"Audio track {role} is unavailable on disk")
+        selected.append(master)
+    return selected[0], selected[1]
+
+
+def resolve_transcription_normalized(
+    transcription_id: int,
+    meeting_id: int,
+    jobs: JobRepository,
+    recordings: RecordingRepository,
+) -> Recording:
+    """Resolve the normalized audio from the completed transcription job itself."""
+    transcription_jobs = [
+        job
+        for job in jobs.list(meeting_id=meeting_id, limit=10000)
+        if job.job_type == JobType.TRANSCRIBE
+        and job.status == JobStatus.COMPLETED
+        and job.payload.get("transcription_id") == transcription_id
+    ]
+    if any(
+        not isinstance(job.payload.get("recording_id"), int)
+        or isinstance(job.payload.get("recording_id"), bool)
+        for job in transcription_jobs
+    ):
+        raise ValidationError(
+            "Cannot select synchronized tracks: a completed transcription job "
+            "has no reliable source recording"
+        )
+    source_ids = {
+        job.payload.get("recording_id")
+        for job in transcription_jobs
+        if isinstance(job.payload.get("recording_id"), int)
+        and not isinstance(job.payload.get("recording_id"), bool)
+    }
+    if len(source_ids) != 1:
+        raise ValidationError(
+            "Cannot select synchronized tracks: this transcription has no unique "
+            "completed source recording"
+        )
+    source_id = next(iter(source_ids))
+    source = recordings.get(source_id)
+    if not source or source.meeting_id != meeting_id or source.role != "original":
+        raise ValidationError(
+            "Cannot select synchronized tracks: the transcription source recording is unavailable"
+        )
+    normalized_candidates = [
+        recording
+        for recording in recordings.list_for_meeting(meeting_id)
+        if recording.role == "normalized"
+        and recording.metadata.get("source_recording_id") == source_id
+    ]
+    if not normalized_candidates:
+        raise ValidationError(
+            "Cannot select synchronized tracks: normalized audio for this "
+            "transcription source is unavailable"
+        )
+    return max(normalized_candidates, key=lambda item: (item.created_at, item.id))
 
 
 class SummaryService:

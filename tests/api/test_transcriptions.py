@@ -15,10 +15,15 @@ import pytest
 from fastapi.testclient import TestClient
 
 from local_meeting_ai.api.app import create_app
+from local_meeting_ai.application.ai_services import (
+    resolve_transcription_normalized,
+    select_synchronized_masters,
+)
 from local_meeting_ai.config import AppSettings
 from local_meeting_ai.domain.entities import (
     DiarizationSegment,
     MediaProbe,
+    Recording,
     SegmentDraft,
     TranscriptionEngineRequest,
     TranscriptionResult,
@@ -450,4 +455,148 @@ def test_composite_asr_persists_integrated_speaker_turns(tmp_path: Path) -> None
         assert [segment["speaker_id"] is not None for segment in detail["segments"]] == [
             True,
             True,
+        ]
+
+
+def test_master_track_clusters_are_namespaced_and_ambiguous_segments_stay_unassigned(
+    tmp_path: Path,
+) -> None:
+    with _client(tmp_path) as client:
+        meeting = client.post("/api/meetings", json={"title": "Track attribution"}).json()
+        client.post(
+            f"/api/meetings/{meeting['id']}/import",
+            files={"file": ("track-test.wav", _wav_bytes(), "audio/wav")},
+        )
+        started = client.post(
+            f"/api/meetings/{meeting['id']}/transcriptions",
+            json={"profile_id": "balanced", "language": "en"},
+        ).json()
+        assert _wait_for_job(client, started["job"]["uuid"])["status"] == "completed"
+        transcription_id = started["transcription"]["id"]
+        container = client.app.state.container
+
+        turns = [
+            DiarizationSegment(0, 1200, 0, "master_microphone"),
+            DiarizationSegment(1200, 2800, 0, "master_system"),
+            # Equal evidence from separate source namespaces is ambiguous.
+            DiarizationSegment(1200, 2000, 1, "master_microphone"),
+            DiarizationSegment(1200, 2000, 1, "master_system"),
+        ]
+        assigned = container.transcriptions.assign_diarization(
+            meeting_id=meeting["id"], transcription_id=transcription_id,
+            diarization=turns, minimum_overlap_ratio=0.15,
+        )
+
+        segments = container.transcriptions.segments(transcription_id)
+        speakers = container.transcriptions.speakers_for_transcription(transcription_id)
+        assert assigned == 2
+        assert segments[0].speaker_id != segments[1].speaker_id
+        assert segments[0].speaker_id is not None
+        assert segments[1].speaker_id is not None
+        assert {speaker.display_name for speaker in speakers} == {
+            "Microfone — Falante 1", "Áudio do sistema — Falante 1",
+            "Microfone — Falante 2", "Áudio do sistema — Falante 2",
+        }
+
+        microphone_speaker = next(
+            speaker for speaker in speakers
+            if speaker.stable_key == "diarization:master_microphone:0"
+        )
+        profile = container.speaker_profiles.create(
+            name="Saved profile", sample_path=None
+        )
+        container.transcriptions.assign_diarization(
+            meeting_id=meeting["id"], transcription_id=transcription_id,
+            diarization=turns, minimum_overlap_ratio=0.15,
+            recognized_profiles={("master_microphone", 0): profile},
+        )
+        matched = container.transcriptions.get_speaker(microphone_speaker.id)
+        assert matched is not None and matched.display_name == "Saved profile"
+        with container.database.read() as connection:
+            profile_row = connection.execute(
+                "SELECT profile_id FROM speakers WHERE id = ?",
+                (microphone_speaker.id,),
+            ).fetchone()
+        assert profile_row["profile_id"] == profile.id
+
+        container.transcriptions.rename_speaker(microphone_speaker.id, "Manual name")
+        container.transcriptions.assign_diarization(
+            meeting_id=meeting["id"], transcription_id=transcription_id,
+            diarization=turns, minimum_overlap_ratio=0.15,
+            recognized_profiles={("master_microphone", 0): profile},
+        )
+        manually_named = container.transcriptions.get_speaker(microphone_speaker.id)
+        assert manually_named is not None and manually_named.display_name == "Manual name"
+
+        # Reprocessing with equal evidence across sources clears stale labels.
+        container.transcriptions.assign_diarization(
+            meeting_id=meeting["id"], transcription_id=transcription_id,
+            diarization=[
+                DiarizationSegment(0, 1200, 0, "master_microphone"),
+                DiarizationSegment(1200, 2000, 0, "master_microphone"),
+                DiarizationSegment(2000, 2800, 0, "master_system"),
+            ], minimum_overlap_ratio=0.15,
+        )
+        segments = container.transcriptions.segments(transcription_id)
+        assert segments[0].speaker_id is not None
+        assert segments[1].speaker_id is None
+
+        # Legacy mono turns retain the former max-overlap tie behavior.
+        container.transcriptions.assign_diarization(
+            meeting_id=meeting["id"], transcription_id=transcription_id,
+            diarization=[
+                DiarizationSegment(0, 1200, 0),
+                DiarizationSegment(0, 1200, 1),
+            ], minimum_overlap_ratio=0.15,
+        )
+        assert container.transcriptions.segments(transcription_id)[0].speaker_id is not None
+
+
+def test_master_selection_follows_the_requested_transcription_source(
+    tmp_path: Path,
+) -> None:
+    with _client(tmp_path) as client:
+        meeting = client.post("/api/meetings", json={"title": "Two audio sources"}).json()
+        transcription_ids: list[int] = []
+        for index in range(2):
+            imported = client.post(
+                f"/api/meetings/{meeting['id']}/import",
+                files={"file": (f"source-{index}.wav", _wav_bytes(), "audio/wav")},
+            ).json()
+            assert _wait_for_job(client, imported["job"]["uuid"])["status"] == "completed"
+            started = client.post(
+                f"/api/meetings/{meeting['id']}/transcriptions",
+                json={"profile_id": "balanced", "language": "en"},
+            ).json()
+            assert _wait_for_job(client, started["job"]["uuid"])["status"] == "completed"
+            transcription_ids.append(started["transcription"]["id"])
+
+        container = client.app.state.container
+        normalized = resolve_transcription_normalized(
+            transcription_ids[0], meeting["id"],
+            container.jobs, container.recordings,
+        )
+        latest_normalized = container.recordings.latest_for_role(meeting["id"], "normalized")
+        assert latest_normalized is not None and latest_normalized.id != normalized.id
+        source_id = normalized.metadata["source_recording_id"]
+        source = container.recordings.get(source_id)
+        assert source is not None
+
+        masters = [
+            Recording(
+                id=900 + index, meeting_id=meeting["id"], role=role,
+                local_path=source.local_path, original_filename=None,
+                media_type="audio/wav", size_bytes=source.size_bytes,
+                duration_ms=normalized.duration_ms, sample_rate=48000,
+                channels=1, sha256=None,
+                metadata={"synchronized_with_recording_id": source.id},
+                created_at="later",
+            )
+            for index, role in enumerate(("master_microphone", "master_system"))
+        ]
+        selected = select_synchronized_masters(
+            normalized, container.recordings.list_for_meeting(meeting["id"]) + masters
+        )
+        assert [item.metadata["synchronized_with_recording_id"] for item in selected] == [
+            source_id, source_id,
         ]
