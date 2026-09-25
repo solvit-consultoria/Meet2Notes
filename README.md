@@ -30,9 +30,23 @@ Set-ExecutionPolicy -Scope Process Bypass
 
 Depois, abra `http://127.0.0.1:8765`. O perfil `-Mvp` instala captura e Faster Whisper, baixa e verifica o modelo `small` e confirma que **FFmpeg e FFprobe** estão acessíveis. O primeiro download exige internet e cerca de 486 MB livres. Se o WinGet acabou de instalar o FFmpeg e esta sessão não vê as ferramentas, reinicie o PowerShell e execute o instalador novamente; ele procura os executáveis nos diretórios WinGet `Links` e `Packages`.
 
-O `small` é a opção inicial para começar. O instalador confirma os arquivos do modelo, mas não faz benchmark no PC. Modelos maiores usam mais memória e podem ser mais lentos em CPU; teste uma gravação curta antes de trocar em **Configurações → Transcrição**. O perfil `-Mvp` não instala PyTorch/CUDA, diarização nem runtime de resumo por IA por padrão.
+O `small` é a opção inicial para começar. O instalador confirma os arquivos do modelo, mas não faz benchmark no PC. Modelos maiores usam mais memória e podem ser mais lentos em CPU; teste uma gravação curta antes de trocar em **Configurações → Transcrição**. O perfil `-Mvp` não instala diarização nem o runtime local de resumo por IA por padrão. A captura e a transcrição por ASR podem continuar usando CUDA mesmo quando o resumo local roda em CPU.
 
-Para instalar também o motor Sherpa-ONNX e os modelos de diarização, execute `.\install.ps1 -Mvp -InstallDiarization`. O resumo local é opcional e depende de haver uma wheel compatível de `llama-cpp-python` para a versão de Python e Windows; o perfil MVP não anuncia notas de IA como prontas. Confira runtime e modelo em **Configurações → AI engine** antes de processar uma reunião. Pyannote Community exige aceite dos termos do modelo e token próprio; não faz parte desta instalação padrão.
+Para instalar também o motor Sherpa-ONNX e os modelos de diarização, execute `.\install.ps1 -Mvp -InstallDiarization`. Para habilitar resumos locais, execute:
+
+```powershell
+.\install.ps1 -Mvp -InstallSummaries
+```
+
+O instalador adiciona o runtime `llama-cpp-python` e baixa o modelo recomendado **LFM2.5 1.2B Q4**, com cerca de **731 MB**. Se o aplicativo já usa uma pasta de modelos configurada, passe exatamente esse caminho para o instalador com `-ModelsDirectory` — por exemplo, `-ModelsDirectory "D:\Meeting\Models"`. O comando completo deve manter o mesmo diretório ativo do aplicativo:
+
+```powershell
+.\install.ps1 -Mvp -InstallSummaries -ModelsDirectory "D:\Meeting\Models"
+```
+
+Depois, encerre e reinicie o aplicativo. Em **Configurações → AI engine**, selecione o perfil **LFM2.5 1.2B Q4** se ele ainda não estiver selecionado e clique em **Carregar**. A configuração inicial deve indicar que o modelo está pronto para carregar; após carregar, confira que o motor aparece como pronto/na memória antes de gerar notas. No Windows com **Python 3.13**, o instalador usa o runtime de resumo em **CPU**, pois não há wheel CUDA compatível do llama.cpp para essa versão. Isso não remove nem substitui o runtime CUDA do Faster Whisper: o ASR pode continuar usando GPU. Veja o [guia de instalação do Windows](docs/windows-install.md) para os passos e verificações.
+
+Pyannote Community exige aceite dos termos do modelo e token próprio; não faz parte desta instalação padrão.
 
 Para desenvolvimento ou uma instalação offline, use `-SkipModels` e/ou `-SkipFfmpeg`. O instalador mostrará que a configuração está **incompleta** enquanto faltar um requisito; importar e transcrever dependem de FFmpeg, FFprobe e um modelo local. Execute o verificador depois de completar a configuração:
 

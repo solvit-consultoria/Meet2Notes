@@ -6,6 +6,7 @@ and future plans do not become mixed together.
 
 ## Current behavior and public contracts
 
+- [Instalação no Windows](windows-install.md): instalação base e configuração opcional do runtime e modelo local de resumo.
 - [Audio capture](audio-capture.md): microphone + system recording and setup on
   Windows, Linux, and macOS.
 - [Architecture](architecture.md): process boundaries, workers, storage, and the
