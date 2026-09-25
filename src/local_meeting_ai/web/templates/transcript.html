@@ -61,7 +61,7 @@
       <div class="transcription-primary-actions">
         <button type="button" class="button primary start-transcription-button {{ '' if request.query_params.get('new') == '1' else 'hidden' }}" id="start-transcription">
           <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3a3 3 0 0 0-3 3v6a3 3 0 0 0 6 0V6a3 3 0 0 0-3-3Z"/><path d="M5 11v1a7 7 0 0 0 14 0v-1M12 19v3M8 22h8"/></svg>
-          Start transcription
+          <span data-i18n="capture.start_recording">Iniciar gravação</span>
         </button>
         <div class="live-action-group hidden" id="live-actions">
           <button type="button" class="live-pause-button" id="pause-capture">
@@ -349,9 +349,9 @@
   <form class="modal-panel capture-modal-panel" id="transcription-form">
     <div class="modal-header capture-modal-header">
       <div>
-        <span class="eyebrow">New transcription</span>
-        <h2>Choose your audio sources</h2>
-        <p>For a video call, combine your microphone with system audio.</p>
+        <span class="eyebrow" data-i18n="capture.new_recording">Nova gravação</span>
+        <h2 data-i18n="capture.choose_audio">Escolha as entradas de áudio</h2>
+        <p data-i18n="capture.audio_source_intro">Grave o microfone e o áudio do sistema. A transcrição é processada depois que você encerrar.</p>
       </div>
       <button type="button" class="icon-button close-button" data-close-transcription aria-label="Close">
         <svg viewBox="0 0 24 24" aria-hidden="true"><path d="m6 6 12 12M18 6 6 18"/></svg>
@@ -436,7 +436,7 @@
       <button type="button" class="button secondary" data-close-transcription>Cancel</button>
       <button type="submit" class="button primary" id="transcription-submit">
         <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3a3 3 0 0 0-3 3v6a3 3 0 0 0 6 0V6a3 3 0 0 0-3-3Z"/><path d="M5 11v1a7 7 0 0 0 14 0v-1M12 19v3M8 22h8"/></svg>
-        <span>Start live transcription</span>
+        <span data-i18n="capture.start_recording">Iniciar gravação</span>
       </button>
     </div>
   </form>
@@ -458,9 +458,10 @@
         <small>These choices apply only to this meeting.</small>
       </div>
       <div class="postprocess-option-card postprocess-speaker-option" id="postprocess-diarization-option">
-        <input id="postprocess-diarization" type="checkbox" checked>
+        <input id="postprocess-diarization" type="checkbox">
         <div>
-          <label for="postprocess-diarization"><strong>Identify speakers</strong></label>
+          <label for="postprocess-diarization"><strong data-i18n="postprocess.identify_speakers">Identificar falantes (opcional)</strong></label>
+          <small class="postprocess-diarization-standby" id="postprocess-diarization-standby" data-i18n="capture.diarization_standby">Em espera por padrão. Ative manualmente se quiser testar a identificação de falantes; os rótulos ainda podem precisar de revisão.</small>
           <p class="postprocess-option-guidance hidden" id="postprocess-diarization-unavailable"><span data-i18n="postprocess.diarization_unavailable">Speaker identification is unavailable. Install or load its engine in</span> <a href="/settings#speaker-engine" data-i18n="postprocess.settings_link">Settings</a>.</p>
           <div class="postprocess-speakers" id="postprocess-speakers">
             <span>Number of speakers</span>

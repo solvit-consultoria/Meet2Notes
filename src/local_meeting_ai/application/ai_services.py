@@ -349,6 +349,8 @@ class SummaryService:
             ),
             None,
         )
+        readiness = self._readiness(config, capability, selected)
+        capability["readiness"] = readiness
         if isinstance(selected, dict):
             selected_installed = selected.get("installed", False)
             if config.get("profile_id") == "custom-gguf":
@@ -366,6 +368,64 @@ class SummaryService:
                 }
             )
         return capability
+
+    def _readiness(
+        self,
+        config: dict[str, Any],
+        capability: dict[str, Any],
+        selected: Any,
+    ) -> dict[str, str]:
+        provider = str(config.get("provider") or "local")
+        if provider == "disabled":
+            return {
+                "status": "model_not_selected",
+                "message": "Choose a summary model in Settings.",
+                "action": "settings_select_model",
+            }
+        if provider == "local":
+            if not capability.get("available"):
+                return {
+                    "status": "runtime_missing",
+                    "message": "Install the local summary runtime, then restart Meet2Notes.",
+                    "action": "install_summary_runtime",
+                }
+            if not isinstance(selected, dict):
+                return {
+                    "status": "model_not_selected",
+                    "message": "Choose an available local summary model in Settings.",
+                    "action": "settings_select_model",
+                }
+            if not self._local_model_ready(config):
+                return {
+                    "status": "model_missing",
+                    "message": "Install the selected local summary model in Settings.",
+                    "action": "settings_install_model",
+                }
+            return {
+                "status": "ready",
+                "message": "The selected local summary model is installed and ready to load.",
+                "action": "load_model",
+            }
+        if not isinstance(selected, dict):
+            return {
+                "status": "model_not_selected",
+                "message": "Choose a summary provider and model in Settings.",
+                "action": "settings_select_model",
+            }
+        if not capability.get("available"):
+            return {
+                "status": "provider_runtime_missing",
+                "message": (
+                    "Install the selected summary provider runtime, "
+                    "then restart Meet2Notes."
+                ),
+                "action": "install_provider_runtime",
+            }
+        return {
+            "status": "ready",
+            "message": "The selected summary provider is ready to use.",
+            "action": "verify_provider_settings",
+        }
 
     async def preload_default(self) -> None:
         config = configured_values(
@@ -400,14 +460,18 @@ class SummaryService:
             SUMMARY_DEFAULTS,
         )
         if config["provider"] == "disabled":
-            raise CapabilityUnavailableError(
-                "Select an AI model in Settings first"
-            )
+            raise CapabilityUnavailableError("Choose a summary model in Settings first.")
         if config["provider"] == "local":
             capability = self.engine.capability()
-            if not capability["available"] or not self._local_model_ready(config):
+            if not capability["available"]:
                 raise CapabilityUnavailableError(
-                    "Install the selected local AI model in Settings first"
+                    "The local summary runtime (llama.cpp) is not installed. "
+                    "Run .\\install.ps1 -Mvp -InstallSummaries, then restart Meet2Notes."
+                )
+            if not self._local_model_ready(config):
+                raise CapabilityUnavailableError(
+                    "The selected local summary model is not installed. "
+                    "Open Settings → Local AI, install the selected model, and select it."
                 )
         template = self.templates.get(template_id) if template_id is not None else None
         if template_id is not None and template is None:
@@ -462,14 +526,18 @@ class SummaryService:
             SUMMARY_DEFAULTS,
         )
         if config["provider"] == "disabled":
-            raise CapabilityUnavailableError(
-                "Select an AI model in Settings first"
-            )
+            raise CapabilityUnavailableError("Choose a summary model in Settings first.")
         if config["provider"] == "local":
             capability = self.engine.capability()
-            if not capability["available"] or not self._local_model_ready(config):
+            if not capability["available"]:
                 raise CapabilityUnavailableError(
-                    "Install the selected local AI model in Settings first"
+                    "The local summary runtime (llama.cpp) is not installed. "
+                    "Run .\\install.ps1 -Mvp -InstallSummaries, then restart Meet2Notes."
+                )
+            if not self._local_model_ready(config):
+                raise CapabilityUnavailableError(
+                    "The selected local summary model is not installed. "
+                    "Open Settings → Local AI, install the selected model, and select it."
                 )
         updated = self.transcriptions.set_speaker_summary_status(
             speaker_id,

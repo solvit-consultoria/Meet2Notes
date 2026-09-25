@@ -22,6 +22,7 @@ param(
     [switch]$SkipFfmpeg,
     [switch]$SkipModels,
     [switch]$InstallDiarization,
+    [switch]$InstallSummaries,
     [switch]$Mvp,
     [switch]$Dev,
     [switch]$Start
@@ -163,6 +164,38 @@ if ($Mvp) {
             "-m", "pip", "install", "-e", ".[diarization]"
         )
     }
+    if ($InstallSummaries) {
+        Write-Step "Installing the local meeting-summary runtime"
+        Invoke-Checked $EnvironmentPython @(
+            "-m", "pip", "install", "huggingface-hub>=0.27,<2"
+        )
+        $SummaryBackend = "cpu"
+        if ($AiBackend -eq "cuda" -or ($AiBackend -eq "auto" -and (Get-Command nvidia-smi -ErrorAction SilentlyContinue))) {
+            if ([int]$VersionParts[1] -ge 10 -and [int]$VersionParts[1] -le 12) {
+                $SummaryBackend = "cuda"
+            } else {
+                Write-Warning "The installed Python version has no compatible llama.cpp CUDA wheel; summaries will use CPU."
+            }
+        }
+        $SummaryWheelIndex = if ($SummaryBackend -eq "cuda") {
+            "https://abetlen.github.io/llama-cpp-python/whl/cu124"
+        } else {
+            "https://abetlen.github.io/llama-cpp-python/whl/cpu"
+        }
+        & $EnvironmentPython -m pip install "llama-cpp-python>=0.3.8,<1" --only-binary=:all: --extra-index-url $SummaryWheelIndex
+        if ($LASTEXITCODE -ne 0 -and $SummaryBackend -eq "cuda" -and $AiBackend -eq "auto") {
+            Write-Warning "CUDA summary runtime installation failed; retrying with the portable CPU wheel."
+            Invoke-Checked $EnvironmentPython @(
+                "-m", "pip", "install", "--force-reinstall",
+                "llama-cpp-python>=0.3.8,<1",
+                "--only-binary=:all:",
+                "--extra-index-url", "https://abetlen.github.io/llama-cpp-python/whl/cpu"
+            )
+        } elseif ($LASTEXITCODE -ne 0) {
+            throw "The local summary runtime could not be installed. Check that Python 3.10-3.12 is selected for CUDA, or rerun with -AiBackend cpu."
+        }
+        Write-Host "Local summaries will use the $SummaryBackend llama.cpp backend."
+    }
     if ($Dev) {
         Invoke-Checked $EnvironmentPython @("-m", "pip", "install", "-e", ".[dev]")
     }
@@ -173,6 +206,7 @@ if ($Mvp) {
             "--models", "whisper"
         )
         if ($InstallDiarization) { $ModelArguments += "diarization" }
+        if ($InstallSummaries) { $ModelArguments += "summary" }
         $ModelArguments += @("--whisper-model", $WhisperModel)
         if ($ModelsDirectory) { $ModelArguments += @("--models-dir", $ModelsDirectory) }
         Invoke-Checked $EnvironmentPython $ModelArguments
@@ -194,7 +228,13 @@ if ($Mvp) {
     }
     Write-Host "Choose the finalized-meeting export folder in Settings before your first real meeting."
     Write-Host "Optional: rerun with -InstallDiarization to install Sherpa-ONNX speaker support."
-    Write-Host "Optional local AI summaries require a compatible llama-cpp-python runtime; configure and verify separately in Settings."
+    if ($InstallSummaries -and -not $SkipModels) {
+        Write-Host "Local AI summaries are ready. Select the installed LFM2.5 model in Settings if it is not already selected."
+    } elseif ($InstallSummaries) {
+        Write-Host "Local summary runtime installed. Install/select a model in Settings, or rerun without -SkipModels to download LFM2.5."
+    } else {
+        Write-Host "Optional local summaries: rerun .\install.ps1 -Mvp -InstallSummaries to install llama.cpp and the recommended LFM2.5 model."
+    }
     Write-Host "Open the local interface with: .\start.bat"
     if ($Start) {
         & (Join-Path $EnvironmentRoot "Scripts\meet2notes.exe")
@@ -270,12 +310,13 @@ $LlamaIndex = if ($LlamaBackend -eq "cuda") {
 Write-Host "PyTorch backend: $ResolvedBackend"
 Write-Host "llama.cpp backend: $LlamaBackend"
 & $EnvironmentPython -m pip install "llama-cpp-python>=0.3.8,<1" `
-    --extra-index-url $LlamaIndex
+    --only-binary=:all: --extra-index-url $LlamaIndex
 if ($LASTEXITCODE -ne 0 -and $AiBackend -eq "auto" -and $LlamaBackend -eq "cuda") {
     Write-Warning "CUDA wheel installation failed; falling back to the portable CPU wheel."
     Invoke-Checked $EnvironmentPython @(
         "-m", "pip", "install", "--force-reinstall",
         "llama-cpp-python>=0.3.8,<1",
+        "--only-binary=:all:",
         "--extra-index-url",
         "https://abetlen.github.io/llama-cpp-python/whl/cpu"
     )

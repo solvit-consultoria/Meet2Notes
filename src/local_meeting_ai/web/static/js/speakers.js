@@ -24,6 +24,7 @@
   let recordingTimer = null;
   let recordingStartedAt = 0;
   let suppressStoppedSample = false;
+  let saveInProgress = false;
   const voiceAudio = new Audio();
   let playingProfileId = null;
   const escape = (v) => String(v).replace(/[&<>'"]/g, (x) => ({ "&":"&amp;", "<":"&lt;", ">":"&gt;", "'":"&#39;", '"':"&quot;" }[x]));
@@ -41,14 +42,41 @@
   }
   document.querySelectorAll("[data-speaker-tab]").forEach(button => button.addEventListener("click", () => { document.querySelectorAll("[data-speaker-tab]").forEach(x => x.classList.toggle("active", x === button)); document.querySelectorAll("[data-speaker-panel]").forEach(x => x.hidden = x.dataset.speakerPanel !== button.dataset.speakerTab); }));
   document.querySelector("#add-speaker-profile").onclick = () => { resetRecorderForm(); dialog.showModal(); };
-  document.querySelectorAll("[data-close-dialog]").forEach(button => button.addEventListener("click", () => dialog.close()));
-  dialog.addEventListener("click", (event) => { if (event.target === dialog) dialog.close(); });
+  document.querySelectorAll("[data-close-dialog]").forEach(button => button.addEventListener("click", requestDialogClose));
+  dialog.addEventListener("click", (event) => { if (event.target === dialog) requestDialogClose(); });
+  dialog.addEventListener("cancel", (event) => { event.preventDefault(); requestDialogClose(); });
   dialog.addEventListener("close", stopAndReleaseRecorder);
   consent.addEventListener("change", updateSaveAvailability);
   form.elements.name.addEventListener("input", updateSaveAvailability);
   fileInput.addEventListener("change", () => { if (fileInput.files.length) { clearSample(); setStatus(t("speakers.file_selected", "Existing audio selected. It will be uploaded only when you save.")); } updateSaveAvailability(); });
 
   function setStatus(message, state = "ready") { recorderStatus.textContent = message; recorderStatus.dataset.state = state; }
+  function requestDialogClose() {
+    if (saveInProgress) {
+      const message = window.Meet2Notes?.currentLanguage === "pt-BR"
+        ? "Aguarde a confirmação do salvamento antes de fechar."
+        : window.Meet2Notes?.currentLanguage === "es"
+          ? "Espera la confirmación del guardado antes de cerrar."
+          : "Wait for the save confirmation before closing.";
+      setStatus(message, "working");
+      return;
+    }
+    const hasUnsavedAudio = Boolean(sampleFile || fileInput.files.length || chunks.length || mediaRecorder?.state === "recording");
+    if (hasUnsavedAudio) {
+      const language = window.Meet2Notes?.currentLanguage;
+      const message = language === "pt-BR"
+        ? "Há uma amostra de áudio que ainda não foi salva. Quer descartá-la e fechar?"
+        : language === "es"
+          ? "Hay una muestra de audio que aún no se guardó. ¿Quieres descartarla y cerrar?"
+          : "There is an audio sample that has not been saved. Discard it and close?";
+      if (!window.confirm(message)) return;
+      suppressStoppedSample = true;
+      clearSample();
+      fileInput.value = "";
+      chunks = [];
+    }
+    dialog.close();
+  }
   function updateSaveAvailability() { saveButton.disabled = !consent.checked || !form.elements.name.value.trim() || (!sampleFile && !fileInput.files.length) || Boolean(mediaRecorder?.state === "recording"); }
   function releaseStream() { if (recordingTimer) clearInterval(recordingTimer); recordingTimer = null; mediaStream?.getTracks().forEach(track => track.stop()); mediaStream = null; }
   function stopAndReleaseRecorder() { suppressStoppedSample = true; if (mediaRecorder?.state === "recording") mediaRecorder.stop(); releaseStream(); }
@@ -86,8 +114,13 @@
         updateSaveAvailability();
       }, { once: true });
       recordingStartedAt = Date.now(); mediaRecorder.start(250); recordStart.disabled = true; recordStop.disabled = false;
-      setStatus(t("speakers.recording_now", "Recording · 0:00 / 1:00"), "recording");
-      recordingTimer = setInterval(() => { const seconds = Math.floor((Date.now() - recordingStartedAt) / 1000); setStatus(`${t("speakers.recording_now_prefix", "Recording")} · ${formatSeconds(seconds)} / 1:00`, "recording"); if (seconds >= 60 && mediaRecorder?.state === "recording") mediaRecorder.stop(); }, 250);
+      const captureGuidance = window.Meet2Notes?.currentLanguage === "pt-BR"
+        ? " · recomendado 15–30 s · limite 1:00"
+        : window.Meet2Notes?.currentLanguage === "es"
+          ? " · recomendado 15–30 s · límite 1:00"
+          : " · 15–30 s recommended · 1:00 limit";
+      setStatus(`${t("speakers.recording_now", "Recording · 0:00 / 1:00")}${captureGuidance}`, "recording");
+      recordingTimer = setInterval(() => { const seconds = Math.floor((Date.now() - recordingStartedAt) / 1000); setStatus(`${t("speakers.recording_now_prefix", "Recording")} · ${formatSeconds(seconds)} / 1:00${captureGuidance}`, "recording"); if (seconds >= 60 && mediaRecorder?.state === "recording") mediaRecorder.stop(); }, 250);
     } catch (error) {
       releaseStream(); recordStart.disabled = false; recordStop.disabled = true;
       const message = error?.name === "NotAllowedError" ? t("speakers.mic_denied", "Microphone permission was denied. Allow access in the browser and try again.") : error?.name === "NotFoundError" ? t("speakers.mic_missing", "No microphone was found. Connect one or upload a WAV/MP3 sample.") : error?.message || t("speakers.record_error", "Recording failed. Check the microphone permission and try again.");
@@ -120,11 +153,17 @@
     if (!consent.checked) { setStatus(t("speakers.consent_required", "Check the consent box before recording."), "error"); return; }
     const audioFile = sampleFile || fileInput.files[0];
     if (!audioFile) { setStatus(t("speakers.sample_required", "Record or choose a sample before saving."), "error"); return; }
-    const payload = new FormData(); payload.set("name", form.elements.name.value.trim()); payload.set("file", audioFile, audioFile.name || "voice-sample.wav");
-    saveButton.disabled = true; saveButton.textContent = t("speakers.saving_voice", "Saving…");
-    try { await api("/api/speaker-profiles", { method: "POST", body: payload }); dialog.close(); resetRecorderForm(); await load(); }
+    const profileName = form.elements.name.value.trim();
+    const payload = new FormData(); payload.set("name", profileName); payload.set("file", audioFile, audioFile.name || "voice-sample.wav");
+    saveInProgress = true; saveButton.disabled = true; saveButton.textContent = t("speakers.saving_voice", "Saving…");
+    try {
+      const savedProfile = await api("/api/speaker-profiles", { method: "POST", body: payload });
+      dialog.close(); resetRecorderForm();
+      window.Meet2Notes?.toast?.(`Amostra de ${savedProfile.name || profileName} salva.`);
+      try { await load(); } catch (error) { list.textContent = error.message || "Could not refresh saved voices."; }
+    }
     catch (error) { setStatus(error.message || t("speakers.save_error", "Could not save the voice sample."), "error"); }
-    finally { saveButton.textContent = t("speakers.save_voice", "Save voice"); updateSaveAvailability(); }
+    finally { saveInProgress = false; saveButton.textContent = t("speakers.save_voice", "Save voice"); updateSaveAvailability(); }
   };
   function syncPlaybackControls() { list.querySelectorAll("[data-play-profile]").forEach(button => { const active = Number(button.dataset.playProfile) === playingProfileId; button.setAttribute("aria-pressed", String(active)); button.title = active ? "Stop" : "Play saved voice"; button.innerHTML = `${icon(active ? "stop" : "play")} ${active ? "Stop" : "Play"}`; }); }
   function stopVoice() { voiceAudio.pause(); voiceAudio.currentTime = 0; playingProfileId = null; syncPlaybackControls(); }

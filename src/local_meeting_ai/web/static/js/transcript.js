@@ -643,8 +643,10 @@
     }
     const submitCopy = document.querySelector("#transcription-submit span");
     submitCopy.textContent = mode === "file"
-      ? "Import and transcribe"
-      : "Start live transcription";
+      ? t("capture.import_transcribe")
+      : realtimeToggle.checked
+        ? t("capture.start_live_transcription")
+        : t("capture.start_recording");
     const modes = selectedLiveModes();
     const summary = document.querySelector("#source-selection-summary");
     summary.classList.toggle("combined", mode === "combined");
@@ -1872,7 +1874,7 @@
     workflowCompleted = false;
     const isImport = kind === "import";
     const finalPass = document.querySelector("#postprocess-final-pass");
-    document.querySelector("#postprocess-diarization").checked = true;
+    document.querySelector("#postprocess-diarization").checked = false;
     document.querySelector("#postprocess-summary").checked = true;
     populatePostprocessNoteFormats();
     configurePostprocessAvailability();
@@ -1913,9 +1915,10 @@
 
     const diarizationInput = document.querySelector("#postprocess-diarization");
     diarizationInput.disabled = !diarizationReady;
-    diarizationInput.checked = diarizationReady;
+    diarizationInput.checked = false;
     document.querySelector("#postprocess-diarization-option").classList.toggle("is-disabled", !diarizationReady);
     document.querySelector("#postprocess-diarization-unavailable").classList.toggle("hidden", diarizationReady);
+    document.querySelector("#postprocess-diarization-standby").classList.toggle("hidden", !diarizationReady);
 
     const summaryInput = document.querySelector("#postprocess-summary");
     summaryInput.disabled = !summaryReady;
@@ -2060,8 +2063,8 @@
 
   function renderEmpty() {
     document.querySelector("#editor-meta").textContent = captureSession
-      ? "Listening to the selected source"
-      : "No transcript yet";
+      ? t("capture.listening_selected")
+      : t("capture.transcript_pending");
     segmentContainer.innerHTML = captureSession
       ? liveTranscriptionEnabled
         ? `
@@ -2081,9 +2084,9 @@
           <span class="minimal-empty-icon">
             <svg viewBox="0 0 64 64" aria-hidden="true"><path d="M13 18h38M13 31h26M13 44h32"/><path d="M47 40a8 8 0 1 0 0 16 8 8 0 0 0 0-16Z"/><path d="m53 52 7 7"/></svg>
           </span>
-          <h2>Your transcript will appear here</h2>
-          <p>Start with a microphone, system audio, an audio interface, or a media file.</p>
-          ${startActionAvailable ? '<button type="button" class="button primary" data-empty-start>Start transcription</button>' : ""}
+          <h2>${escapeHTML(t("capture.empty_title"))}</h2>
+          <p>${escapeHTML(t("capture.empty_hint"))}</p>
+          ${startActionAvailable ? `<button type="button" class="button primary" data-empty-start>${escapeHTML(t("capture.start_recording"))}</button>` : ""}
         </div>`;
   }
 
@@ -3055,6 +3058,12 @@
   document.querySelector("#transcription-form").addEventListener("submit", submitTranscription);
   document.querySelector("#realtime-transcription").addEventListener("change", (event) => {
     liveTranscriptionEnabled = event.currentTarget.checked;
+    const startLabel = document.querySelector("#transcription-submit span");
+    if (selectedSourceMode() !== "file") {
+      startLabel.textContent = liveTranscriptionEnabled
+        ? t("capture.start_live_transcription")
+        : t("capture.start_recording");
+    }
     try { window.localStorage.setItem(liveTranscriptionPreferenceKey, String(liveTranscriptionEnabled)); }
     catch { /* The setting still applies for this page session. */ }
   });

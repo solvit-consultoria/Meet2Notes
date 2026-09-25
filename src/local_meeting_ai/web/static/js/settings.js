@@ -1105,6 +1105,7 @@
       });
       renderSummaryCatalog(summaryModels);
     }
+    renderSummaryReadiness(summaries);
     $("#ai-worker-summary").textContent = renderWorker(
       $("#ai-runtime-state"),
       summaries,
@@ -1209,23 +1210,110 @@
       "settings.first_run_ready",
       diarization.available ? "settings.first_run_install_speaker_models" : "settings.first_run_optional_runtime_missing",
     );
-    const summaries = capabilities.summaries || {};
-    const summaryProvider = summaryPreferences?.summary_engine?.provider || "local";
-    if (summaryProvider !== "local" && summaryProvider !== "disabled") {
-      setState("#first-run-summary-state", true, "settings.first_run_remote_selected", "settings.first_run_remote_selected");
-      return;
-    }
-    if (summaryProvider === "disabled") {
-      setState("#first-run-summary-state", true, "settings.first_run_disabled", "settings.first_run_disabled");
-      return;
-    }
-    setState(
-      "#first-run-summary-state",
-      Boolean(summaries.available && summaries.installed),
-      "settings.first_run_ready",
-      summaries.available ? "settings.first_run_install_summary_model" : "settings.first_run_optional_runtime_missing",
-    );
+    renderSummaryReadiness(capabilities.summaries || {});
   }
+
+  function renderSummaryReadiness(summaries = latestCapabilities?.summaries || {}) {
+    const targets = [$("#first-run-summary-state"), $("#ai-summary-readiness")].filter(Boolean);
+    if (!targets.length) return;
+    const readiness = summaries.readiness || {};
+    const action = readiness.action || "settings_select_model";
+    const profileId = summaries.selected_profile
+      || summaryPreferences?.summary_engine?.profile_id
+      || $("#ai-profile-id")?.value;
+    const profile = summaryModels.find((item) => item.id === profileId);
+    const statusKey = {
+      ready: action === "verify_provider_settings"
+        ? "settings.summary_provider_review"
+        : "settings.summary_ready_to_load",
+      model_missing: "settings.summary_model_missing",
+      model_not_selected: "settings.summary_model_not_selected",
+      runtime_missing: "settings.summary_runtime_missing",
+      provider_runtime_missing: "settings.summary_provider_runtime_missing",
+    }[readiness.status] || "settings.summary_model_not_selected";
+    const buttonKey = {
+      load_model: "settings.summary_action_load",
+      settings_install_model: "settings.summary_action_install",
+      install_summary_runtime: "settings.summary_action_configure",
+      install_provider_runtime: "settings.summary_action_configure",
+      settings_select_model: "settings.summary_action_select",
+      verify_provider_settings: "settings.summary_action_review",
+    }[action] || "settings.summary_action_configure";
+    const localActionAvailable = (action === "load_model" && profile?.installed && profile?.runtime_available)
+      || (action === "settings_install_model" && profile?.managed !== false && profile?.runtime_available);
+    const ready = readiness.status === "ready" && action !== "verify_provider_settings";
+    const statusLabel = t(statusKey);
+    const buttonLabel = t(buttonKey);
+    const markup = `
+      <span class="${ready ? "status-badge status-ready" : "neutral-pill"}">${escapeHTML(statusLabel)}</span>
+      <button class="text-button first-run-summary-action" type="button"
+        data-summary-readiness-action="${escapeHTML(action)}"
+        data-summary-profile-id="${escapeHTML(profileId || "")}">
+        ${escapeHTML(buttonLabel)}
+      </button>`;
+    const setupCommand = readiness.status === "runtime_missing"
+      ? summaries.setup_command
+      : "";
+    const setupMarkup = setupCommand
+      ? `<div class="summary-setup-command"><code>${escapeHTML(setupCommand)}</code><button class="text-button" type="button" data-copy-summary-command="${escapeHTML(setupCommand)}">${escapeHTML(t("settings.summary_copy_command"))}</button></div>`
+      : "";
+    targets.forEach((target) => {
+      target.innerHTML = markup + setupMarkup;
+      const button = target.querySelector("[data-summary-readiness-action]");
+      if ((action === "load_model" || action === "settings_install_model") && !localActionAvailable) {
+        button.title = t("settings.summary_action_unavailable");
+        button.dataset.navigateOnly = "true";
+      }
+    });
+  }
+
+  function openSummaryEngineSetup() {
+    activateSettingsTab("ai-engine", true);
+    $("#ai-model-list")?.scrollIntoView({ behavior: "smooth", block: "center" });
+    $("#ai-model-list")?.closest(".model-table-wrap")?.focus?.({ preventScroll: true });
+  }
+
+  async function runSummaryReadinessAction(button) {
+    const action = button.dataset.summaryReadinessAction;
+    const profileId = button.dataset.summaryProfileId;
+    const profile = summaryModels.find((item) => item.id === profileId);
+    if (!button.dataset.navigateOnly && action === "load_model" && profile?.installed && profile?.runtime_available) {
+      await summaryCatalogAction("load", profile.id, button);
+      return;
+    }
+    if (!button.dataset.navigateOnly && action === "settings_install_model"
+        && profile && profile.managed !== false && profile.runtime_available) {
+      await summaryCatalogAction("install", profile.id, button);
+      return;
+    }
+    openSummaryEngineSetup();
+  }
+
+  document.addEventListener("click", (event) => {
+    const copyButton = event.target.closest("[data-copy-summary-command]");
+    if (copyButton) {
+      const command = copyButton.dataset.copySummaryCommand;
+      const copy = navigator.clipboard?.writeText
+        ? navigator.clipboard.writeText(command)
+        : Promise.resolve().then(() => {
+          const temporary = document.createElement("textarea");
+          temporary.value = command;
+          temporary.setAttribute("readonly", "");
+          temporary.style.position = "fixed";
+          temporary.style.opacity = "0";
+          document.body.append(temporary);
+          temporary.select();
+          const copied = document.execCommand("copy");
+          temporary.remove();
+          if (!copied) throw new Error("Clipboard access is unavailable.");
+        });
+      void copy.then(() => toast(t("settings.summary_command_copied")))
+        .catch((error) => toast(error.message, "error"));
+      return;
+    }
+    const button = event.target.closest("[data-summary-readiness-action]");
+    if (button) void runSummaryReadinessAction(button);
+  });
 
   function renderPlugins(catalog) {
     pluginCatalog = catalog.plugins || [];

@@ -13,13 +13,17 @@ from local_meeting_ai.adapters.diarization.profile_matching import (
 from local_meeting_ai.adapters.diarization.sherpa_onnx import (
     SherpaOnnxDiarizationEngine,
 )
-from local_meeting_ai.adapters.summary.llama_cpp import LlamaCppSummaryEngine
+from local_meeting_ai.adapters.summary.llama_cpp import (
+    LlamaCppSummaryEngine,
+    _summary_setup_command,
+)
 from local_meeting_ai.adapters.transcription.faster_whisper import FasterWhisperEngine
 from local_meeting_ai.application.summary_templates import (
     BUILTIN_SUMMARY_TEMPLATES,
     render_summary_template,
 )
 from local_meeting_ai.domain.entities import ModelProfile
+from local_meeting_ai.domain.errors import CapabilityUnavailableError
 
 
 def test_diarization_uses_an_independent_worker(tmp_path: Path) -> None:
@@ -78,6 +82,49 @@ def test_summary_accepts_an_external_gguf_without_copying_it(tmp_path: Path) -> 
         assert external.is_file()
     finally:
         engine.shutdown()
+
+
+def test_summary_model_missing_error_points_to_settings_install_action(
+    tmp_path: Path,
+) -> None:
+    engine = LlamaCppSummaryEngine(tmp_path / "models")
+    try:
+        with pytest.raises(
+            CapabilityUnavailableError,
+            match=r"LFM2\.5 1\.2B Q4 is not installed",
+        ):
+            engine._resolve_model_path(
+                {"profile_id": "lfm2.5-1.2b-q4"},
+                allow_download=False,
+            )
+    finally:
+        engine.shutdown()
+
+
+def test_windows_summary_setup_command_uses_quoted_absolute_project_root(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    project_root = tmp_path / "Solvit's Meeting app"
+    monkeypatch.setattr(
+        "local_meeting_ai.adapters.summary.llama_cpp.installation_directory",
+        lambda: project_root,
+    )
+
+    command = _summary_setup_command(is_windows=True)
+
+    escaped_root = str(project_root).replace("'", "''")
+    assert command == (
+        f"Set-Location -LiteralPath '{escaped_root}'; "
+        ".\\install.ps1 -Mvp -InstallSummaries"
+    )
+    assert "\0" not in command
+
+
+def test_non_windows_summary_setup_command_stays_unchanged() -> None:
+    assert _summary_setup_command(is_windows=False) == (
+        "python -m pip install -e '.[summaries]'"
+    )
 
 
 class _ContextCheckingSummaryModel:

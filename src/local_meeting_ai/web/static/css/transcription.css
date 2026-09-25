@@ -2432,6 +2432,7 @@
 .postprocess-option-card {
   display: grid;
   grid-template-columns: auto minmax(0, 1fr);
+  min-width: 0;
   gap: 10px;
   align-items: start;
   padding: 12px;
@@ -2529,6 +2530,13 @@
 
 .postprocess-speaker-option > div {
   min-width: 0;
+}
+
+.postprocess-diarization-standby {
+  display: block;
+  margin: 5px 0 0;
+  max-width: 70ch;
+  overflow-wrap: anywhere;
 }
 
 .postprocess-speakers.is-disabled {

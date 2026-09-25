@@ -66,6 +66,45 @@ def test_transcription_models_are_not_kept_in_memory_by_default(
     assert configured["keep_model_loaded"] is False
 
 
+def test_summary_capability_explains_which_local_setup_step_is_missing(
+    client: TestClient,
+    monkeypatch,
+) -> None:
+    service = client.app.state.container.summary_service
+    runtime_missing = service._readiness(
+        {"provider": "local", "profile_id": "lfm2.5-1.2b-q4"},
+        {"available": False},
+        None,
+    )
+    assert runtime_missing["status"] == "runtime_missing"
+    assert runtime_missing["action"] == "install_summary_runtime"
+
+    model_missing = service._readiness(
+        {"provider": "local", "profile_id": "lfm2.5-1.2b-q4"},
+        {"available": True},
+        {"id": "lfm2.5-1.2b-q4", "installed": False},
+    )
+    assert model_missing["status"] == "model_missing"
+    assert model_missing["action"] == "settings_install_model"
+
+    monkeypatch.setattr(service, "_local_model_ready", lambda config: True)
+    ready = service._readiness(
+        {"provider": "local", "profile_id": "lfm2.5-1.2b-q4"},
+        {"available": True},
+        {"id": "lfm2.5-1.2b-q4", "installed": True},
+    )
+    assert ready["status"] == "ready"
+    assert ready["action"] == "load_model"
+
+    disabled = service._readiness(
+        {"provider": "disabled", "profile_id": "lfm2.5-1.2b-q4"},
+        {"available": True},
+        {"id": "lfm2.5-1.2b-q4", "installed": True},
+    )
+    assert disabled["status"] == "model_not_selected"
+    assert disabled["action"] == "settings_select_model"
+
+
 def test_local_http_port_is_validated_and_persisted(client: TestClient) -> None:
     updated = client.put("/api/settings", json={"http_port": 8899})
 

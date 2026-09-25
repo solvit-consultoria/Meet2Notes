@@ -343,6 +343,58 @@ body {
   box-shadow: 0 0 0 3px rgba(18, 183, 106, .13);
 }
 
+/* Idle means the installed engine is ready to load when requested. */
+.engine-status-row.idle .engine-status-dot {
+  background: #12b76a;
+  box-shadow: 0 0 0 3px rgba(18, 183, 106, .13);
+}
+.engine-status-row.idle .engine-status-value strong { color: #079455; }
+
+#first-run-summary-state {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  align-items: center;
+  gap: 5px 10px;
+}
+.first-run-summary-action {
+  max-width: 100%;
+  text-align: right;
+  white-space: normal;
+}
+.ai-summary-readiness {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px 14px;
+  min-width: 0;
+}
+.ai-summary-readiness .first-run-summary-action {
+  flex: 0 1 auto;
+  margin-left: auto;
+}
+.summary-setup-command {
+  display: flex;
+  flex: 1 0 100%;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 6px 12px;
+  min-width: 0;
+}
+.summary-setup-command code {
+  max-width: 100%;
+  padding: 5px 8px;
+  color: var(--text);
+  background: rgba(99, 49, 45, .06);
+  border-radius: 6px;
+  font-size: 10px;
+  overflow-wrap: anywhere;
+  text-align: left;
+  white-space: pre-wrap;
+}
+
 .engine-status-row.running .engine-status-dot {
   background: #176bff;
   box-shadow: 0 0 0 3px rgba(23, 107, 255, .14);

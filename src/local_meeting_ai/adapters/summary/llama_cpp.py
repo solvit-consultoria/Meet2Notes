@@ -20,6 +20,7 @@ from local_meeting_ai.domain.errors import (
     JobCancelledError,
 )
 from local_meeting_ai.domain.protocols import CancellationCheck, ProgressReporter
+from local_meeting_ai.paths import installation_directory
 
 from .credentials import get_litellm_api_key, secure_storage_status
 
@@ -77,6 +78,17 @@ CUSTOM_GGUF_PROFILE: dict[str, Any] = {
     "external_file": True,
 }
 logger = logging.getLogger(__name__)
+
+
+def _summary_setup_command(*, is_windows: bool | None = None) -> str:
+    windows = os.name == "nt" if is_windows is None else is_windows
+    if not windows:
+        return "python -m pip install -e '.[summaries]'"
+    project_root = str(installation_directory()).replace("'", "''")
+    return (
+        f"Set-Location -LiteralPath '{project_root}'; "
+        ".\\install.ps1 -Mvp -InstallSummaries"
+    )
 
 
 class LlamaCppSummaryEngine:
@@ -156,6 +168,8 @@ class LlamaCppSummaryEngine:
             "available": dependency,
             "installed": self._default_model_path().is_file(),
             "install_command": 'python -m pip install -e ".[summaries]"',
+            "setup_command": _summary_setup_command(),
+            "model_install_action": "Settings → Local AI → Install",
             "repository": DEFAULT_REPOSITORY,
             "model_file": DEFAULT_FILE,
             "models_directory": str(self.models_dir),
